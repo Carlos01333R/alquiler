@@ -6,8 +6,6 @@ import { useRouter } from "next/navigation"
 import { MenuItems } from "@/seet/Menu"
 import Header from "@/components/Header"
 import Sidebar from "@/components/sidebar"
-import '../layout.css'
-
 
 export default function DashboardLayout({
   children,
