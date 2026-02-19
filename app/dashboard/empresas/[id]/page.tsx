@@ -1005,7 +1005,7 @@ export default function EmpresaDetailPage() {
             <h2 className="text-lg font-semibold text-foreground">Documentos Comerciales</h2>
             <Button
               size="sm"
-              onClick={() => router.push('/documentos/nuevo')}
+              onClick={() => router.push('/dashboard/dasdocumentos/nuevo')}
             >
               <Plus className="mr-1 h-4 w-4" />
               Nueva Orden
@@ -1044,7 +1044,7 @@ export default function EmpresaDetailPage() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => router.push(`/documentos/${doc.id}/totales`)}
+                            onClick={() => router.push(`/dashboard/documentos/${doc.id}/totales`)}
                           >
                             <Eye className="h-4 w-4" />
                           </Button>
