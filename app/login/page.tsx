@@ -56,7 +56,7 @@ export default function Login() {
           <div className="bg-white/20 rounded-2xl p-4 inline-block mb-4">
           <Image src="/logo.jpg" alt="Logo" width={100} height={100} className="rounded-2xl" />
           </div>
-          <h1 className="text-2xl font-bold text-white mb-2">Sistema de alquiles</h1>
+          <h1 className="text-2xl font-bold text-white mb-2">Sistema de alquiler</h1>
           <p className="text-white/90 text-sm">Somos la solución a tus necesidades</p>
         </div>
 
