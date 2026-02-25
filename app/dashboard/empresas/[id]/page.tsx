@@ -69,6 +69,7 @@ interface DocumentoAdjunto {
 
 interface Usuario {
   id: string
+  nombre: string
   email: string
   password: string
   rol: 'admin' | 'tecnico'
@@ -113,6 +114,7 @@ export default function EmpresaDetailPage() {
   // Usuario form
   const [usuarioOpen, setUsuarioOpen] = useState(false)
   const [usuarioForm, setUsuarioForm] = useState({
+    nombre: "",
     email: "",
     password: "",
     rol: "tecnico" as 'admin' | 'tecnico',
@@ -148,17 +150,22 @@ export default function EmpresaDetailPage() {
       }
 
       // Cargar usuarios de la empresa
-      const { data: usuariosData } = await supabase
-        .from("usuarios_empresa")
-        .select("usuarios")
-        .eq("empresa_id", id)
-        .single()
+    
+    const { data: usuariosData, error } = await supabase
+      .from("usuarios")
+      .select("*")
+      .eq("empresa_id", id)
+     
 
-      if (usuariosData?.usuarios) {
-        const usuariosList = Array.isArray(usuariosData.usuarios) ? usuariosData.usuarios : []
-        setUsuarios(usuariosList)
-      }
-
+    if (error) {
+      console.error("Error cargando usuarios:", error);
+      return;
+    }
+    if (usuariosData && usuariosData.length > 0) {
+      setUsuarios(usuariosData);
+    } else {
+      setUsuarios([]); 
+    }
       // Cargar documentos comerciales
       const { data: docsComerciales } = await supabase
         .from("documentos_comerciales")
@@ -265,54 +272,48 @@ export default function EmpresaDetailPage() {
 
   // ==================== USUARIOS ====================
   const addUsuario = async () => {
-    if (!usuarioForm.email || !usuarioForm.password) {
-      toast.error("Email y contraseña son obligatorios")
-      return
-    }
-
-    try {
-      const nuevoUsuario: Usuario = {
-        id: crypto.randomUUID(),
-        email: usuarioForm.email,
-        password: usuarioForm.password, // En producción, hashear la contraseña
-        rol: usuarioForm.rol,
-        created_at: new Date().toISOString()
-      }
-
-      const usuariosActualizados = [...usuarios, nuevoUsuario]
-
-      // Verificar si existe el registro de usuarios_empresa
-      const { data: existingData } = await supabase
-        .from("usuarios_empresa")
-        .select("id")
-        .eq("empresa_id", id)
-        .single()
-
-      if (existingData) {
-        // UPDATE
-        const { error } = await supabase
-          .from("usuarios_empresa")
-          .update({ usuarios: usuariosActualizados })
-          .eq("empresa_id", id)
-
-        if (error) throw error
-      } else {
-        // INSERT
-        const { error } = await supabase
-          .from("usuarios_empresa")
-          .insert({ empresa_id: id, usuarios: usuariosActualizados })
-
-        if (error) throw error
-      }
-
-      toast.success("Usuario agregado exitosamente")
-      setUsuarioForm({ email: "", password: "", rol: "tecnico" })
-      setUsuarioOpen(false)
-      loadData()
-    } catch (error: any) {
-      toast.error(error.message || "Error al agregar usuario")
-    }
+  if (!usuarioForm.email || !usuarioForm.password) {
+    toast.error("Email y contraseña son obligatorios");
+    return;
   }
+
+  try {
+    // 1️⃣ Crear usuario en Auth (requiere service role key en backend)
+    const { data: authData, error: authError } =
+      await supabase.auth.signUp({
+        email: usuarioForm.email,
+        password: usuarioForm.password,
+      });
+
+    if (authError) throw authError;
+
+    if (!authData.user) {
+      throw new Error("No se pudo crear el usuario");
+    }
+
+    // 2️⃣ Crear perfil en tabla usuarios
+    const { error: profileError } = await supabase
+      .from("usuarios")
+      .insert({
+        id: authData.user.id,
+        empresa_id: id, // id de la empresa
+        nombre: usuarioForm.nombre,
+        email: usuarioForm.email,
+        rol: usuarioForm.rol,
+      });
+
+    if (profileError) throw profileError;
+
+    toast.success("Usuario agregado exitosamente");
+
+    setUsuarioForm({ nombre: "", email: "", password: "", rol: "tecnico" });
+    setUsuarioOpen(false);
+
+    loadData();
+  } catch (error: any) {
+    toast.error(error.message || "Error al agregar usuario");
+  }
+};
 
   const deleteUsuario = async (usuarioId: string) => {
     if (!confirm("¿Eliminar este usuario?")) return
@@ -887,6 +888,15 @@ export default function EmpresaDetailPage() {
                   <DialogTitle>Nuevo Usuario</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-4">
+                    <div className="space-y-2">
+                    <Label>Nombre *</Label>
+                    <Input
+                      value={usuarioForm.nombre}
+                      onChange={(e) => setUsuarioForm((p) => ({ ...p, nombre: e.target.value }))}
+                      placeholder="Nombre usuario"
+                    />
+                  
+                  </div>
                   <div className="space-y-2">
                     <Label>Email *</Label>
                     <Input
@@ -932,69 +942,54 @@ export default function EmpresaDetailPage() {
 
           <Card>
             <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Contraseña</TableHead>
-                    <TableHead>Rol</TableHead>
-                    <TableHead>Fecha Creación</TableHead>
-                    <TableHead className="w-12" />
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {usuarios.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
-                        No hay usuarios registrados
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    usuarios.map((usuario) => (
-                      <TableRow key={usuario.id}>
-                        <TableCell className="font-medium">{usuario.email}</TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <span className="font-mono">
-                              {showPassword[usuario.id] ? usuario.password : '••••••••'}
-                            </span>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => togglePasswordVisibility(usuario.id)}
-                            >
-                              {showPassword[usuario.id] ? (
-                                <EyeOff className="h-4 w-4" />
-                              ) : (
-                                <Eye className="h-4 w-4" />
-                              )}
-                            </Button>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                            usuario.rol === 'admin' 
-                              ? 'bg-purple-100 text-purple-800' 
-                              : 'bg-blue-100 text-blue-800'
-                          }`}>
-                            {usuario.rol === 'admin' ? 'Administrador' : 'Técnico'}
-                          </span>
-                        </TableCell>
-                        <TableCell>{formatDate(usuario.created_at)}</TableCell>
-                        <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => deleteUsuario(usuario.id)}
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
+             <Table>
+  <TableHeader>
+    <TableRow>
+      <TableHead>Nombre</TableHead> {/* ← Cambiado */}
+      <TableHead>Email</TableHead>
+      <TableHead>Rol</TableHead>
+      <TableHead>Fecha Creación</TableHead>
+      <TableHead className="w-12" />
+    </TableRow>
+  </TableHeader>
+  <TableBody>
+    {usuarios.length === 0 ? (
+      <TableRow>
+        <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
+          No hay usuarios registrados
+        </TableCell>
+      </TableRow>
+    ) : (
+      usuarios.map((usuario) => (
+        <TableRow key={usuario.id}>
+          <TableCell className="font-medium">
+            {usuario.nombre} {/* ← Mostrar NOMBRE aquí */}
+          </TableCell>
+          <TableCell>{usuario.email}</TableCell> {/* ← Email en su columna */}
+          <TableCell>
+            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+              usuario.rol === 'admin' 
+                ? 'bg-purple-100 text-purple-800' 
+                : 'bg-blue-100 text-blue-800'
+            }`}>
+              {usuario.rol === 'admin' ? 'Administrador' : 'Técnico'}
+            </span>
+          </TableCell>
+          <TableCell>{formatDate(usuario.created_at)}</TableCell>
+          <TableCell>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => deleteUsuario(usuario.id)}
+            >
+              <Trash2 className="h-4 w-4 text-destructive" />
+            </Button>
+          </TableCell>
+        </TableRow>
+      ))
+    )}
+  </TableBody>
+</Table>
             </CardContent>
           </Card>
         </TabsContent>
