@@ -300,6 +300,29 @@ export function ActivoForm({ activo }: ActivoFormProps) {
       return
     }
 
+    // 🔥 Geocoding antes de guardar
+    let latitude = null;
+    let longitude = null;
+
+    if (form.ubicacion) {
+      const geoRes = await fetch("/api/geocode", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ address: form.ubicacion }),
+      });
+
+      const geoData = await geoRes.json();
+
+      if (geoRes.ok) {
+        latitude = geoData.latitude;
+        longitude = geoData.longitude;
+      } else {
+        toast.error("No se pudo obtener coordenadas");
+        setSaving(false);
+        return;
+      }
+    }
+
     setSaving(true)
     
     try {
@@ -321,6 +344,8 @@ export function ActivoForm({ activo }: ActivoFormProps) {
         const payload = {
           ...form,
           categoria_id: categoriaId || null,
+           latitude,
+           longitude,
           fecha_ultima_certificacion: form.fecha_ultima_certificacion || null,
           fecha_proxima_certificacion: form.fecha_proxima_certificacion || null,
           fecha_ultimo_mantenimiento: form.fecha_ultimo_mantenimiento || null,
@@ -345,6 +370,8 @@ export function ActivoForm({ activo }: ActivoFormProps) {
           .insert({
             ...form,
             categoria_id: categoriaId || null,
+            latitude,
+            longitude,
             fecha_ultima_certificacion: form.fecha_ultima_certificacion || null,
             fecha_proxima_certificacion: form.fecha_proxima_certificacion || null,
             fecha_ultimo_mantenimiento: form.fecha_ultimo_mantenimiento || null,
