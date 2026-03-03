@@ -5,45 +5,52 @@ import React from "react"
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
-import type { Montaje } from "@/lib/types"
+import type { Mantenimiento } from "@/lib/types"
 import { DataTable } from "@/components/data-table"
 import { StatusBadge } from "@/components/status-badge"
 import { Button } from "@/components/ui/button"
 import { Plus } from "lucide-react"
 
-export default function MontajesPage() {
+export default function MantenimientosPage() {
   const router = useRouter()
-  const [data, setData] = useState<Montaje[]>([])
+  const [data, setData] = useState<Mantenimiento[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     supabase
       .from("montajes")
-      .select("*")
+      .select("*, empresas(razon_social)")
       .order("created_at", { ascending: false })
       .then(({ data: d }) => {
-        setData((d as Montaje[]) || [])
+        setData((d as Mantenimiento[]) || [])
         setLoading(false)
       })
   }, [])
 
   const columns = [
-    { key: "numero", label: "Numero" },
-    { key: "tipo", label: "Tipo" },
-    { key: "nombre_empresa_cliente", label: "Cliente" },
-    { key: "nit_empresa_cliente", label: "NIT" },
-    { key: "fecha_inicio", label: "Fecha Inicio" },
-    { key: "fecha_fin", label: "Fecha Fin" },
+    { key: "titulo", label: "Titulo" },
     {
-      key: "estado",
-      label: "Estado",
-      render: (item: Montaje) => <StatusBadge value={item.estado} />,
+      key: "tipo",
+      label: "Tipo",
+      render: (item: Mantenimiento) => <StatusBadge value={item.tipo} />,
     },
+    {
+      key: "prioridad",
+      label: "Prioridad",
+      render: (item: Mantenimiento) => <StatusBadge value={item.prioridad} />,
+    },
+    {
+      key: "cliente",
+      label: "Cliente",
+      render: (item: Mantenimiento) => item.nombre_cliente || item.empresas?.razon_social || "-",
+    },
+    { key: "fecha_inicio", label: "Fecha Inicio" },
+    { key: "fecha_final", label: "Fecha Final" },
   ]
 
   if (loading) {
     return (
-       <div className="h-screen flex items-center justify-center">
+        <div className="h-screen flex items-center justify-center">
         <p>Cargando...</p>
       </div>
     )
@@ -54,9 +61,10 @@ export default function MontajesPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground">Montajes</h1>
-          <p className="text-muted-foreground">Gestion de montajes y alquileres</p>
+          <p className="text-muted-foreground">Ordenes de montaje</p>
+        
         </div>
-        <Button onClick={() => router.push("/dashboard/montajes/nuevo")}>
+        <Button onClick={() => router.push("/dashboard/mantenimientos/nuevo")}>
           <Plus className="mr-2 h-4 w-4" />
           Nuevo Montaje
         </Button>
@@ -64,8 +72,8 @@ export default function MontajesPage() {
       <DataTable
         data={data as unknown as Record<string, unknown>[]}
         columns={columns as { key: string; label: string; render?: (item: Record<string, unknown>) => React.ReactNode }[]}
-        searchKey="nombre_empresa_cliente"
-        searchPlaceholder="Buscar por cliente..."
+        searchKey="titulo"
+        searchPlaceholder="Buscar por titulo..."
         onRowClick={(item) => router.push(`/dashboard/montajes/${item.id}`)}
       />
     </div>
