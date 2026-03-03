@@ -4,6 +4,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import Image from 'next/image'
+import { toast } from "sonner"
 
 interface MiEmpresa {
   id: string
@@ -132,7 +133,7 @@ export default function MiEmpresaPage() {
       }
     } catch (error) {
       console.error('Error cargando empresa:', error)
-      alert('Error al cargar la información de la empresa')
+      toast.error("Error cargando la información de la empresa")
     } finally {
       setLoading(false)
     }
@@ -178,7 +179,7 @@ export default function MiEmpresaPage() {
       return { url: publicUrl, path: filePath }
     } catch (error) {
       console.error('Error subiendo logo:', error)
-      alert('Error al subir el logo')
+      toast.error("Error subiendo el logo")
       return null
     } finally {
       setUploadingLogo(false)
@@ -207,7 +208,7 @@ export default function MiEmpresaPage() {
       return { url: publicUrl, path: filePath }
     } catch (error) {
       console.error('Error subiendo certificado:', error)
-      alert('Error al subir el certificado')
+      toast.error("Error subiendo el certificado")
       return null
     } finally {
       setUploadingCertificado(false)
@@ -236,7 +237,7 @@ export default function MiEmpresaPage() {
       return { url: publicUrl, path: filePath }
     } catch (error) {
       console.error('Error subiendo RUT:', error)
-      alert('Error al subir el RUT')
+      toast.error("Error subiendo el RUT")
       return null
     } finally {
       setUploadingRut(false)
@@ -304,14 +305,14 @@ export default function MiEmpresaPage() {
         if (error) throw error
       }
 
-      alert('Información guardada exitosamente')
+      toast.success("Información guardada exitosamente")
       setLogoFile(null)
       setCertificadoFile(null)
       setRutFile(null)
       await cargarEmpresa()
     } catch (error) {
       console.error('Error guardando empresa:', error)
-      alert('Error al guardar la información')
+      toast.error("Error al guardar la información")
     } finally {
       setSaving(false)
     }

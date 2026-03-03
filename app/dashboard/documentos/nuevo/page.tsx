@@ -12,14 +12,34 @@ export default function NuevoDocumentoPage() {
   const router = useRouter()
   const [empresas, setEmpresas] = useState<Empresa[]>([])
   const [loading, setLoading] = useState(false)
-  const [formData, setFormData] = useState({
-    numero_documento: '',
-    tipo_documento: 'orden_compra',
-    empresa_id: '',
-    fecha_emision: new Date().toISOString().split('T')[0],
-    estado: 'borrador',
-    observaciones: ''
-  })
+ const generarNumeroDocumento = () => {
+  const caracteres =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789@#$%&";
+  
+  let resultado = "";
+  for (let i = 0; i < 12; i++) {
+    resultado += caracteres.charAt(
+      Math.floor(Math.random() * caracteres.length)
+    );
+  }
+
+  return resultado;
+};
+
+const obtenerFechaColombia = () => {
+  return new Date().toLocaleDateString("en-CA", {
+    timeZone: "America/Bogota",
+  });
+};
+
+const [formData, setFormData] = useState({
+  numero_documento: generarNumeroDocumento(),
+  tipo_documento: "orden_compra",
+  empresa_id: "",
+  fecha_emision: obtenerFechaColombia(),
+  estado: "borrador",
+  observaciones: "",
+});
 
   useEffect(() => {
     cargarEmpresas()

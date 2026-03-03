@@ -279,7 +279,7 @@ export default function SetActivoDetailPage() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <Button variant="ghost" size="sm" onClick={() => router.push("/dashboard/sets-activos")}>
+        <Button variant="ghost" size="sm" onClick={() => router.push("/dashboard/activos")}>
           <ArrowLeft className="mr-1 h-4 w-4" />
           Volver
         </Button>

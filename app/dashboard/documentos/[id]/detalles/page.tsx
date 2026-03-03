@@ -53,20 +53,19 @@ export default function DetallesDocumentoPage() {
     cargarDatos()
   }, [])
 
-  useEffect(() => {
-    // Calcular días totales automáticamente
-    if (formData.fecha_inicio && formData.fecha_fin) {
-      // Crear fechas en zona horaria de Colombia (UTC-5)
-      const inicio = new Date(formData.fecha_inicio + 'T00:00:00-05:00')
-      const fin = new Date(formData.fecha_fin + 'T00:00:00-05:00')
-      
-      // Calcular diferencia en días (sin sumar 1 extra)
-      // Si inicio=14 y fin=15, debe dar 1 día (no 2)
-      const dias = Math.ceil((fin.getTime() - inicio.getTime()) / (1000 * 60 * 60 * 24))
-      
-      setFormData(prev => ({ ...prev, dias_totales: dias > 0 ? dias : 0 }))
-    }
-  }, [formData.fecha_inicio, formData.fecha_fin])
+useEffect(() => {
+  if (formData.fecha_inicio && formData.fecha_fin) {
+    const [anioI, mesI, diaI] = formData.fecha_inicio.split('-').map(Number)
+    const [anioF, mesF, diaF] = formData.fecha_fin.split('-').map(Number)
+    
+    const inicio = new Date(anioI, mesI - 1, diaI)
+    const fin = new Date(anioF, mesF - 1, diaF)
+    
+    const dias = Math.round((fin.getTime() - inicio.getTime()) / (1000 * 60 * 60 * 24))
+    
+    setFormData(prev => ({ ...prev, dias_totales: dias > 0 ? dias : 0 }))
+  }
+}, [formData.fecha_inicio, formData.fecha_fin])
 
   const cargarDatos = async () => {
     try {
@@ -123,19 +122,20 @@ export default function DetallesDocumentoPage() {
     setActivosSeleccionados(activosSeleccionados.filter(a => a.activo_id !== activoId))
   }
 
+
+
   const actualizarActivo = (activoId: string, campo: keyof ActivoSeleccionado, valor: any) => {
-    setActivosSeleccionados(activosSeleccionados.map(activo => {
-      if (activo.activo_id === activoId) {
-        const actualizado = { ...activo, [campo]: valor }
-        // Calcular precio total automáticamente
-        if (campo === 'cantidad' || campo === 'precio_unitario') {
-          actualizado.precio_total = actualizado.cantidad * actualizado.precio_unitario
-        }
-        return actualizado
+  setActivosSeleccionados(activosSeleccionados.map(activo => {
+    if (activo.activo_id === activoId) {
+      const actualizado = { ...activo, [campo]: valor }
+      if (campo === 'cantidad' || campo === 'precio_unitario') {
+        actualizado.precio_total = Math.round(actualizado.cantidad * actualizado.precio_unitario * 100) / 100
       }
-      return activo
-    }))
-  }
+      return actualizado
+    }
+    return activo
+  }))
+}
 
   const agregarMantenimiento = (mantenimiento: Mantenimiento | any) => {
     const existe = mantenimientosSeleccionados.find(m => m.mantenimiento_id === (mantenimiento.mantenimiento_id || mantenimiento.id))
@@ -614,7 +614,12 @@ function TabActivos({
                       min="0"
                       step="0.01"
                       value={activo.precio_unitario || ''}
-                      onChange={(e) => onActualizar(activo.activo_id, 'precio_unitario', parseFloat(e.target.value) || 0)}
+                      onChange={(e) => onActualizar(
+                      activo.activo_id, 
+                      'precio_unitario', 
+                      Math.round(parseFloat(e.target.value) * 100) / 100 || 0
+                    )}
+                      
                       className="w-full px-2 py-1 border rounded text-sm"
                       placeholder="0.00"
                     />

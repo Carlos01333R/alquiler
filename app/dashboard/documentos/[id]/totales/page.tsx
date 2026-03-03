@@ -15,6 +15,7 @@ import type {
 } from '@/types/database.types'
 import { toast } from "sonner"
 import './totales.css'
+import { formatearFecha } from "@/utils/FormatDate"
 
 interface MiEmpresa {
   id: string
@@ -293,11 +294,15 @@ export default function TotalesDocumentoPage() {
               <h2 className="documento-tipo">{documento.tipo_documento.replace('_', ' ')}</h2>
               <p className="documento-numero">{documento.numero_documento}</p>
               <p className="text-sm">
-                Fecha: {new Date(documento.fecha_emision).toLocaleDateString('es-CO', {
-                  year: 'numeric',
-                  month: 'long',
-                  day: 'numeric'
-                })}
+             Fecha: {new Date(documento.fecha_emision + "T00:00:00").toLocaleDateString(
+              "es-CO",
+              {
+                timeZone: "America/Bogota",
+                year: "numeric",
+                month: "long",
+                day: "numeric",
+              }
+            )}
               </p>
               <div className="estado-badge">
                 <span>{documento.estado.toUpperCase()}</span>
@@ -326,12 +331,12 @@ export default function TotalesDocumentoPage() {
               {detalle.direccion && <p className="text-sm"><strong>Dirección:</strong> {detalle.direccion}</p>}
               {detalle.fecha_inicio && (
                 <p className="text-sm">
-                  <strong>Inicio:</strong> {new Date(detalle.fecha_inicio).toLocaleDateString('es-CO')}
+                  <strong>Inicio:</strong> {formatearFecha(detalle.fecha_inicio)}
                 </p>
               )}
               {detalle.fecha_fin && (
                 <p className="text-sm">
-                  <strong>Fin:</strong> {new Date(detalle.fecha_fin).toLocaleDateString('es-CO')}
+                  <strong>Fin:</strong> {formatearFecha(detalle.fecha_fin)}
                 </p>
               )}
               {detalle.dias_totales && <p className="text-sm"><strong>Duración:</strong> {detalle.dias_totales} días</p>}
