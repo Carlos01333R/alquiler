@@ -55,6 +55,7 @@ export type Categoria = {
 }
 
 export type Activo = {
+  condicion: undefined
   id: string
   nombre: string
   tipo: "equipo" | "herramienta"

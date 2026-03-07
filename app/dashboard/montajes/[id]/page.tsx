@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
-import type { Montaje } from "@/lib/types"
+import type { Mantenimiento } from "@/lib/types"
 import { MontajeForm } from "@/components/montaje-form"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
@@ -14,7 +14,7 @@ export default function MontajeDetailPage() {
   const router = useRouter()
   const id = params.id as string
 
-  const [item, setItem] = useState<Montaje | null>(null)
+  const [item, setItem] = useState<Mantenimiento | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -24,7 +24,7 @@ export default function MontajeDetailPage() {
       .eq("id", id)
       .single()
       .then(({ data }) => {
-        setItem(data as Montaje)
+        setItem(data as Mantenimiento)
         setLoading(false)
       })
   }, [id])
@@ -52,7 +52,7 @@ export default function MontajeDetailPage() {
         </Button>
         <div className="flex-1">
           <h1 className="text-2xl font-bold tracking-tight text-foreground">
-            Montaje {item.numero || item.id.slice(0, 8)}
+            Montaje {item.titulo || item.id.slice(0, 8)}
           </h1>
         </div>
         <Button variant="destructive" size="sm" onClick={handleDelete}>

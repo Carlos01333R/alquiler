@@ -64,10 +64,10 @@ export default function SetActivoEditPage() {
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => router.push(`/dashboard/sets-activos/${id}`)}
+          onClick={() => router.push(`/dashboard/activos`)}
         >
           <ArrowLeft className="mr-1 h-4 w-4" />
-          Volver al perfil
+          Volver 
         </Button>
       </div>
 

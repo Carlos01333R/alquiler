@@ -58,6 +58,7 @@ export interface Database {
           documentos_adjuntos: Json
           created_at: string
           updated_at: string
+          condicion: string | null
         }
         Insert: Omit<Database['public']['Tables']['activos']['Row'], 'id' | 'created_at' | 'updated_at'>
         Update: Partial<Database['public']['Tables']['activos']['Insert']>
