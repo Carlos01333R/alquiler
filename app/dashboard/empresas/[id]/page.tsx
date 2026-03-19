@@ -171,6 +171,7 @@ export default function EmpresaDetailPage() {
         .from("documentos_comerciales")
         .select("*")
         .eq("empresa_id", id)
+        .eq("tipo_documento", "orden_compra")
         .order("fecha_emision", { ascending: false })
 
       setDocumentosComerciales((docsComerciales as DocumentoComercial[]) || [])

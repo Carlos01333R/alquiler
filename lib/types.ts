@@ -80,6 +80,8 @@ export type Activo = {
   created_at: string
   updated_at: string
   categorias?: Categoria
+  precio_dia: number
+  precio_mes: number
 }
 
 export type SetActivo = {
@@ -108,6 +110,8 @@ export type SetActivo = {
   created_at: string
   updated_at: string
   categorias?: Categoria
+  precio_dia: number
+  precio_mes: number
 }
 
 export type Mantenimiento = {

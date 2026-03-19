@@ -30,13 +30,18 @@ export const MenuItems = [
     section: 'activos',
     href: '/dashboard/activos'
   },
+  
   {
-    id: 'Documentos',
-    label: 'Documentos',
-    icon: FileText,
-    section: 'documentos',
-    href: '/dashboard/documentos'
-  },
+       id: 'admin',
+       label: 'Documentos',
+       icon: Settings,
+       submenu: [
+         { id: 'orden_compra', label: 'Orden de Compra', icon: FileText, section: 'ordenes', href: '/dashboard/ordenes' },
+         { id: 'cotizacion', label: 'Cotización', icon: FileText, section: 'cotizaciones', href: '/dashboard/cotizaciones' },
+         { id: 'factura', label: 'Factura', icon: FileText, section: 'facturas', href: '/dashboard/facturas' },
+       
+       ]
+     },
   {
     id: 'mantenimientos',
     label: 'Mantenimientos',

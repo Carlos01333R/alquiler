@@ -300,7 +300,7 @@ export function ActivoForm({ activo }: ActivoFormProps) {
       return
     }
 
-    // 🔥 Geocoding antes de guardar
+   
     let latitude = null;
     let longitude = null;
 

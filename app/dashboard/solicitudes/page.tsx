@@ -64,10 +64,10 @@ export default function SolicitudesPage() {
           <h1 className="text-2xl font-bold tracking-tight text-foreground">Solicitudes</h1>
           <p className="text-muted-foreground">Gestion de solicitudes de servicio</p>
         </div>
-        <Button onClick={() => router.push("/dashboard/solicitudes/nueva")}>
+        <button onClick={() => router.push("/dashboard/solicitudes/nueva")} className="flex flex-row items-center px-3 py-2 bg-black text-white rounded-2xl ">
           <Plus className="mr-2 h-4 w-4" />
           Nueva Solicitud
-        </Button>
+        </button>
       </div>
       <DataTable
         data={data as unknown as Record<string, unknown>[]}

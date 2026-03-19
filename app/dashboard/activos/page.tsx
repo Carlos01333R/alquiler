@@ -56,6 +56,17 @@ export default function ActivosPage() {
       label: "Certificacion",
       render: (item: Activo) => <StatusBadge value={item.estado_certificacion} />,
     },
+    {
+      key: "precio_dia",
+      label: "Precio/día",
+      render: (item: Activo) => <span className="text-right">${item.precio_dia.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>,
+    },
+    {
+      key: "precio_mes",
+      label: "Precio/mes",
+      render: (item: Activo) => <span className="text-right">${item.precio_mes.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>, 
+    }
+    
   ]
 
   const setColumns = [
@@ -76,7 +87,17 @@ export default function ActivosPage() {
       label: "Disponibilidad",
       render: (item: SetActivo) => <StatusBadge value={item.estado_disponibilidad} />,
     },
-    { key: "stock", label: "Stock" },
+    {
+      key: "precio_dia",
+      label: "Precio/día",
+      render: (item: SetActivo) => <span className="text-right">${item.precio_dia}</span>,
+    },
+    {
+      key: "precio_mes",
+      label: "Precio/mes",
+      render: (item: SetActivo) => <span className="text-right">${item.precio_mes}</span>,
+    }
+   
   ]
 
   if (loading) {
@@ -98,7 +119,7 @@ export default function ActivosPage() {
           <Button onClick={() => router.push("/dashboard/activos/nuevo")} >
             <Plus className="mr-2 h-4 w-4 text-white" />
          
-            <p className="text-white">   Nuevo Activo</p>
+          Nuevo Activo
           </Button>
           <Button variant="outline" onClick={() => router.push("/dashboard/activos/nuevo-set")}>
             <Plus className="mr-2 h-4 w-4" />
