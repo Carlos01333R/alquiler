@@ -370,7 +370,7 @@ export function MantenimientoForm({ mantenimiento }: MantenimientoFormProps) {
   }
 
   return (
-    <form onSubmit={handleSubmit}>
+    <form onSubmit={handleSubmit} className="bg-white">
       <Card>
         <CardHeader>
           <CardTitle>

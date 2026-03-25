@@ -1,19 +1,18 @@
 "use client"
 
 import React from "react"
-
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
-import type { Mantenimiento } from "@/lib/types"
+import type { Montaje } from "@/lib/types"
 import { DataTable } from "@/components/data-table"
 import { StatusBadge } from "@/components/status-badge"
 import { Button } from "@/components/ui/button"
-import { Plus } from "lucide-react"
+import { Plus, Eye, Pencil } from "lucide-react"
 
-export default function MantenimientosPage() {
+export default function MontajesPage() {
   const router = useRouter()
-  const [data, setData] = useState<Mantenimiento[]>([])
+  const [data, setData] = useState<Montaje[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -22,35 +21,67 @@ export default function MantenimientosPage() {
       .select("*, empresas(razon_social)")
       .order("created_at", { ascending: false })
       .then(({ data: d }) => {
-        setData((d as Mantenimiento[]) || [])
+        setData((d as Montaje[]) || [])
         setLoading(false)
       })
   }, [])
 
   const columns = [
-    { key: "titulo", label: "Titulo" },
+    { key: "titulo", label: "Título" },
     {
       key: "tipo",
       label: "Tipo",
-      render: (item: Mantenimiento) => <StatusBadge value={item.tipo} />,
+      render: (item: Montaje) => <StatusBadge value={item.tipo} />,
     },
     {
       key: "prioridad",
       label: "Prioridad",
-      render: (item: Mantenimiento) => <StatusBadge value={item.prioridad} />,
+      render: (item: Montaje) => <StatusBadge value={item.prioridad} />,
+    },
+    {
+      key: "estado",
+      label: "Estado",
+      render: (item: Montaje) => <StatusBadge value={item.estado} />,
     },
     {
       key: "cliente",
       label: "Cliente",
-      render: (item: Mantenimiento) => item.nombre_cliente || item.empresas?.razon_social || "-",
+      render: (item: Montaje) =>
+        item.nombre_cliente || item.empresas?.razon_social || "-",
     },
     { key: "fecha_inicio", label: "Fecha Inicio" },
     { key: "fecha_final", label: "Fecha Final" },
+    {
+      key: "acciones",
+      label: "Acciones",
+      render: (item: Montaje) => (
+        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 gap-1.5 text-xs"
+            onClick={() => router.push(`/dashboard/montajes/${item.id}`)}
+          >
+            <Eye className="h-3.5 w-3.5" />
+            Ver
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            className="h-8 gap-1.5 text-xs"
+            onClick={() => router.push(`/dashboard/montajes/${item.id}/editar`)}
+          >
+            <Pencil className="h-3.5 w-3.5" />
+            Editar
+          </Button>
+        </div>
+      ),
+    },
   ]
 
   if (loading) {
     return (
-        <div className="h-screen flex items-center justify-center">
+      <div className="h-screen flex items-center justify-center">
         <p>Cargando...</p>
       </div>
     )
@@ -61,19 +92,24 @@ export default function MantenimientosPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground">Montajes</h1>
-          <p className="text-muted-foreground">Ordenes de montaje</p>
-        
+          <p className="text-muted-foreground">Órdenes de montaje</p>
         </div>
-        <Button onClick={() => router.push("/dashboard/mantenimientos/nuevo")}>
+        <Button onClick={() => router.push("/dashboard/montajes/nuevo")}>
           <Plus className="mr-2 h-4 w-4" />
           Nuevo Montaje
         </Button>
       </div>
       <DataTable
         data={data as unknown as Record<string, unknown>[]}
-        columns={columns as { key: string; label: string; render?: (item: Record<string, unknown>) => React.ReactNode }[]}
+        columns={
+          columns as {
+            key: string
+            label: string
+            render?: (item: Record<string, unknown>) => React.ReactNode
+          }[]
+        }
         searchKey="titulo"
-        searchPlaceholder="Buscar por titulo..."
+        searchPlaceholder="Buscar por título..."
         onRowClick={(item) => router.push(`/dashboard/montajes/${item.id}`)}
       />
     </div>

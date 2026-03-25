@@ -4,7 +4,7 @@ import React from "react"
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
-import type { Mantenimiento, Empresa } from "@/lib/types"
+import type { Montaje, Empresa } from "@/lib/types"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -36,7 +36,7 @@ interface Repuesto {
 }
 
 interface MontajeFormProps {
-  montaje?: Mantenimiento
+  montaje?: Montaje
 }
 
 // ─── Sub-components ────────────────────────────────────────────────────────────
@@ -370,7 +370,7 @@ export function MontajeForm({ montaje }: MontajeFormProps) {
   }
 
   return (
-    <form onSubmit={handleSubmit}>
+    <form onSubmit={handleSubmit} className="bg-white">
       <Card>
         <CardHeader>
           <CardTitle>

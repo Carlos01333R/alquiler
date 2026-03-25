@@ -39,6 +39,7 @@ export default function EmpresasPage() {
     { key: "email", label: "Email" },
     { key: "telefono", label: "Telefono" },
     { key: "ciudad", label: "Ciudad" },
+    {key: "nombre_ordenes", label: "Nombre de Órdenes"},
     {
       key: "estado",
       label: "Estado",

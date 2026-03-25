@@ -49,6 +49,7 @@ export default function NuevoDocumentoPage({ tipo, prefix, backPath }: Props) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const docRelacionadoId = searchParams.get('doc_relacionado_id')
+  const cotizacionesExtra = searchParams.get('cotizaciones_extra') || ''
 
   const [empresas, setEmpresas] = useState<Empresa[]>([])
   const [loading, setLoading] = useState(false)
@@ -118,6 +119,7 @@ export default function NuevoDocumentoPage({ tipo, prefix, backPath }: Props) {
 
       const params = new URLSearchParams({ empresa_id: formData.empresa_id })
       if (formData.documento_relacionado_id) params.set('doc_relacionado_id', formData.documento_relacionado_id)
+      if (cotizacionesExtra) params.set('cotizaciones_extra', cotizacionesExtra)
 
       // Redirigir al detalles dentro de la misma sección
       router.push(`${backPath}/${doc.id}/detalles?${params.toString()}`)
@@ -129,6 +131,24 @@ export default function NuevoDocumentoPage({ tipo, prefix, backPath }: Props) {
   }
 
   const empresaSeleccionada = empresas.find(e => e.id === formData.empresa_id)
+
+  const ESTADOS_OC = ['pendiente','en_ejecucion','realizada','finalizada'] as const
+
+const LABELS_OC: Record<typeof ESTADOS_OC[number], string> = {
+  pendiente: 'Pendiente',
+  en_ejecucion: 'En ejecución',
+  realizada: 'Realizada',
+  finalizada: 'Finalizada',
+}
+
+const ESTADOS_DOC = ['por_definir','aprobada','reprobada','vencida'] as const
+
+const LABELS_DOC: Record<typeof ESTADOS_DOC[number], string> = {
+  por_definir: 'Por definir',
+  aprobada: 'Aprobada',
+  reprobada: 'Reprobada',
+  vencida: 'Vencida',
+}
 
   return (
     <div className="max-w-3xl mx-auto p-6">
@@ -181,12 +201,16 @@ export default function NuevoDocumentoPage({ tipo, prefix, backPath }: Props) {
                   onChange={e => setFormData({ ...formData, estado: e.target.value })}
                   className="w-full px-3 py-2 border rounded-md text-sm focus:ring-2 focus:ring-blue-500"
                 >
-                 {tipo === 'orden_compra' ? ['pendiente','en ejecución','realizada','finalizada'].map(e => (
-                    <option key={e} value={e} className="capitalize">{e}</option>
-                  )) : ['por definir','aprovada','reprobada','vencida'].map(e => (
-                    <option key={e} value={e} className="capitalize">{e}</option>
-                  ))}
-
+                 {tipo === 'orden_compra'
+                ? ESTADOS_OC.map(e => (
+                    <option key={e} value={e}>
+                      {LABELS_OC[e]}
+                    </option>
+                  )) :  ESTADOS_DOC.map(e => (
+                  <option key={e} value={e}>
+                    {LABELS_DOC[e]}
+                  </option>
+                ))}
                 </select>
               </div>
             </div>

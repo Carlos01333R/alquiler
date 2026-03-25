@@ -46,6 +46,7 @@ export function EmpresaForm({ empresa }: EmpresaFormProps) {
     ciudad: empresa?.ciudad || "",
     direccion_fiscal: empresa?.direccion_fiscal || "",
     estado: empresa?.estado || "activo",
+    nombre_ordenes: empresa?.nombre_ordenes || "Órdenes de Compra",
   })
 
   const [logo, setLogo] = useState<{
@@ -524,6 +525,19 @@ export function EmpresaForm({ empresa }: EmpresaFormProps) {
                 value={form.direccion_fiscal}
                 onChange={(e) => handleChange("direccion_fiscal", e.target.value)}
               />
+            </div>
+
+            <div className="space-y-2 md:col-span-2">
+              <Label htmlFor="nombre_ordenes">Nombre de Órdenes</Label>
+              <Input
+                id="nombre_ordenes"
+                value={form.nombre_ordenes}
+                onChange={(e) => handleChange("nombre_ordenes", e.target.value)}
+                placeholder="Órdenes de Compra"
+              />
+              <p className="text-xs text-gray-500">
+                Nombre personalizado para las órdenes de esta empresa. Por defecto: "Órdenes de Compra"
+              </p>
             </div>
           </div>
 

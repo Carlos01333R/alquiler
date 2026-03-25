@@ -67,7 +67,24 @@ interface MontajeDetalle {
   es_nuevo?: boolean
 }
 
-type TabType = 'activos' | 'mantenimientos' | 'montajes'
+interface ProyectoDetalle {
+  proyecto_id: string
+  titulo: string
+  descripcion?: string
+  tipo: string
+  prioridad: string
+  fecha_inicio?: string
+  fecha_final?: string
+  actividades_programadas?: string[]
+  repuestos_requeridos?: string[]
+  costo: number
+  es_nuevo?: boolean
+}
+
+// OtrosProyectos usa la misma estructura
+type OtroProyectoDetalle = ProyectoDetalle
+
+type TabType = 'activos' | 'mantenimientos' | 'montajes' | 'proyectos' | 'otros_proyectos'
 
 // ── Helpers de precio ──────────────────────────────────────────────────────────
 function obtenerFechaColombia() {
@@ -118,6 +135,8 @@ export default function DetallesDocumentoPage({ backPath, nextBasePath }: Props)
   const empresaId = searchParams.get('empresa_id')
   const docRelacionadoId = searchParams.get('doc_relacionado_id')
   const modoEditar = searchParams.get('modo') === 'editar'
+  // IDs adicionales de cotizaciones a combinar (solo en ordenes, separados por coma)
+  const cotizacionesExtra = (searchParams.get('cotizaciones_extra') || '').split(',').filter(Boolean)
 
   const [activeTab, setActiveTab] = useState<TabType>('activos')
   const [loading, setLoading] = useState(false)
@@ -132,6 +151,10 @@ export default function DetallesDocumentoPage({ backPath, nextBasePath }: Props)
   const [activosSeleccionados, setActivosSeleccionados] = useState<ActivoSeleccionado[]>([])
   const [mantenimientosSeleccionados, setMantenimientosSeleccionados] = useState<MantenimientoDetalle[]>([])
   const [montajesSeleccionados, setMontajesSeleccionados] = useState<MontajeDetalle[]>([])
+  const [proyectosSeleccionados, setProyectosSeleccionados] = useState<ProyectoDetalle[]>([])
+  const [otrosProyectosSeleccionados, setOtrosProyectosSeleccionados] = useState<OtroProyectoDetalle[]>([])
+  // Rastrear cotizaciones origen (id + número) para guardarlas en el detalle
+  const [cotizacionesOrigen, setCotizacionesOrigen] = useState<{ id: string; numero_documento: string }[]>([])
 
   const [formData, setFormData] = useState({
     fecha_inicio: '',
@@ -153,6 +176,12 @@ export default function DetallesDocumentoPage({ backPath, nextBasePath }: Props)
   useEffect(() => {
     if (docRelacionadoId) cargarDatosRelacionados(docRelacionadoId)
   }, [docRelacionadoId])
+
+  useEffect(() => {
+    if (cotizacionesExtra.length > 0) {
+      cotizacionesExtra.forEach(id => cargarYCombinarCotizacion(id))
+    }
+  }, [])
 
   useEffect(() => {
     if (formData.fecha_inicio && formData.fecha_fin) {
@@ -190,8 +219,114 @@ export default function DetallesDocumentoPage({ backPath, nextBasePath }: Props)
 
       const monts = (det.montajes as unknown as MontajeDetalle[]) || []
       if (monts.length) setMontajesSeleccionados(monts.map(m => ({ ...m, es_nuevo: false })))
+
+      const projs = ((det as any).proyectos as unknown as ProyectoDetalle[]) || []
+      if (projs.length) setProyectosSeleccionados(projs.map(p => ({ ...p, es_nuevo: false })))
+
+      const otrosProjs = ((det as any).otros_proyectos as unknown as OtroProyectoDetalle[]) || []
+      if (otrosProjs.length) setOtrosProyectosSeleccionados(otrosProjs.map(p => ({ ...p, es_nuevo: false })))
+
+      const cotsOrigen = ((det as any).cotizaciones_origen as { id: string; numero_documento: string }[]) || []
+      if (cotsOrigen.length) setCotizacionesOrigen(cotsOrigen)
     } catch (e) {
       console.error('Error cargando detalles existentes:', e)
+    }
+  }
+
+  // ── Combinar datos de cotizacion extra (multi-selección) ─────────────────────
+  const cargarYCombinarCotizacion = async (cotId: string) => {
+    try {
+      // Obtener número de documento de esta cotización
+      const { data: docCot } = await supabase
+        .from('documentos_comerciales')
+        .select('numero_documento, tipo_documento')
+        .eq('id', cotId)
+        .single()
+
+      if (docCot) {
+        setCotizacionesOrigen(prev => {
+          if (prev.find(x => x.id === cotId)) return prev
+          return [...prev, { id: cotId, numero_documento: docCot.numero_documento }]
+        })
+      }
+
+      const { data: det } = await supabase
+        .from('detalles_documentos_comerciales')
+        .select('activos_seleccionados, mantenimientos, montajes, proyectos, otros_proyectos')
+        .eq('documento_comercial_id', cotId)
+        .maybeSingle()
+      if (!det) return
+
+      // Combinar activos — obtener precios actualizados desde DB
+      const acts = (det.activos_seleccionados as unknown as ActivoSeleccionado[]) || []
+      if (acts.length) {
+        const ids = acts.map(a => a.activo_id)
+        const { data: activosDB } = await supabase.from('activos').select('id, nombre, tipo, stock, precio_dia, precio_mes').in('id', ids)
+        const { data: setsDB } = await supabase.from('sets_activos').select('id, nombre, tipo, stock, precio_dia, precio_mes').in('id', ids)
+        const todosDB = [...(activosDB || []), ...(setsDB || [])] as ActivoDB[]
+
+        setActivosSeleccionados(prev => {
+          const nuevos = acts
+            .filter(a => !prev.find(p => p.activo_id === a.activo_id))
+            .map(a => {
+              const db = todosDB.find(d => d.id === a.activo_id)
+              return normalizarActivo({
+                activo_id: a.activo_id,
+                nombre: a.nombre || db?.nombre || '',
+                tipo: a.tipo || db?.tipo || '',
+                cantidad: Number(a.cantidad) || 1,
+                fecha_inicio: '',
+                fecha_fin: '',
+                dias_totales: 0,
+                precio_dia: Number(a.precio_dia) || db?.precio_dia || 0,
+                precio_mes: Number(a.precio_mes) || db?.precio_mes || 0,
+                descuento: Number(a.descuento) || 0,
+                precio_total: 0,
+              }, true)
+            })
+          return [...prev, ...nuevos]
+        })
+      }
+
+      // Combinar mantenimientos
+      const mants = (det.mantenimientos as unknown as MantenimientoDetalle[]) || []
+      if (mants.length) {
+        setMantenimientosSeleccionados(prev => {
+          const nuevos = mants.filter(m => !prev.find(p => p.mantenimiento_id === m.mantenimiento_id))
+          return [...prev, ...nuevos.map(m => ({ ...m, es_nuevo: false }))]
+        })
+      }
+
+      // Combinar montajes
+      const monts = (det.montajes as unknown as MontajeDetalle[]) || []
+      if (monts.length) {
+        setMontajesSeleccionados(prev => {
+          const nuevos = monts.filter(m => !prev.find(p => p.montaje_id === m.montaje_id))
+          return [...prev, ...nuevos.map(m => ({ ...m, es_nuevo: false }))]
+        })
+      }
+
+      // Combinar proyectos
+      const projs = ((det as any).proyectos as unknown as ProyectoDetalle[]) || []
+      if (projs.length) {
+        setProyectosSeleccionados(prev => {
+          const nuevos = projs.filter(p => !prev.find(x => x.proyecto_id === p.proyecto_id))
+          return [...prev, ...nuevos.map(p => ({ ...p, es_nuevo: false }))]
+        })
+      }
+
+      // Combinar otros proyectos
+      const otrosProjs = ((det as any).otros_proyectos as unknown as OtroProyectoDetalle[]) || []
+      if (otrosProjs.length) {
+        setOtrosProyectosSeleccionados(prev => {
+          const nuevos = otrosProjs.filter(p => !prev.find(x => x.proyecto_id === p.proyecto_id))
+          return [...prev, ...nuevos.map(p => ({ ...p, es_nuevo: false }))]
+        })
+      }
+
+      toast.success(`Datos combinados desde cotización adicional`)
+    } catch (e) {
+      console.error('Error combinando cotización extra:', e)
     }
   }
 
@@ -235,7 +370,16 @@ export default function DetallesDocumentoPage({ backPath, nextBasePath }: Props)
     setCargandoRelacion(true)
     try {
       const { data: docRel } = await supabase.from('documentos_comerciales').select('*').eq('id', relId).single()
-      if (docRel) setDocRelacionadoInfo({ numero_documento: docRel.numero_documento, tipo_documento: docRel.tipo_documento })
+      if (docRel) {
+        setDocRelacionadoInfo({ numero_documento: docRel.numero_documento, tipo_documento: docRel.tipo_documento })
+        // Registrar como cotización origen si es cotizacion
+        if (docRel.tipo_documento === 'cotizacion') {
+          setCotizacionesOrigen(prev => {
+            if (prev.find(x => x.id === relId)) return prev
+            return [...prev, { id: relId, numero_documento: docRel.numero_documento }]
+          })
+        }
+      }
 
       const { data: detRel } = await supabase
         .from('detalles_documentos_comerciales')
@@ -257,6 +401,13 @@ export default function DetallesDocumentoPage({ backPath, nextBasePath }: Props)
         if (mants.length) setMantenimientosSeleccionados(mants.map(m => ({ ...m, es_nuevo: false })))
         const monts = (detRel.montajes as unknown as MontajeDetalle[]) || []
         if (monts.length) setMontajesSeleccionados(monts.map(m => ({ ...m, es_nuevo: false })))
+
+        const projs = ((detRel as any).proyectos as unknown as ProyectoDetalle[]) || []
+        if (projs.length) setProyectosSeleccionados(projs.map(p => ({ ...p, es_nuevo: false })))
+
+        const otrosProjs = ((detRel as any).otros_proyectos as unknown as OtroProyectoDetalle[]) || []
+        if (otrosProjs.length) setOtrosProyectosSeleccionados(otrosProjs.map(p => ({ ...p, es_nuevo: false })))
+
         toast.success('Datos del documento relacionado cargados')
       } else {
         toast.info('El documento relacionado no tiene detalles aún')
@@ -270,10 +421,10 @@ export default function DetallesDocumentoPage({ backPath, nextBasePath }: Props)
 
   // ── Activos ────────────────────────────────────────────────────────────────
   /** Garantiza que todos los campos numéricos/string del activo estén definidos */
-  const normalizarActivo = (a: Partial<ActivoSeleccionado> & { activo_id: string }): ActivoSeleccionado => {
+  const normalizarActivo = (a: Partial<ActivoSeleccionado> & { activo_id: string }, mantenerFechasVacias = false): ActivoSeleccionado => {
     const hoy = obtenerFechaColombia()
-    const fi = a.fecha_inicio || hoy
-    const ff = a.fecha_fin || hoy
+    const fi = a.fecha_inicio !== undefined ? (a.fecha_inicio || '') : (mantenerFechasVacias ? '' : hoy)
+    const ff = a.fecha_fin !== undefined ? (a.fecha_fin || '') : (mantenerFechasVacias ? '' : hoy)
     const dias = a.dias_totales != null ? Number(a.dias_totales) : calcularDias(fi, ff)
     const pdia = Number(a.precio_dia) || 0
     const pmes = Number(a.precio_mes) || 0
@@ -443,6 +594,33 @@ export default function DetallesDocumentoPage({ backPath, nextBasePath }: Props)
     }])
   }
 
+  // ── Proyectos ────────────────────────────────────────────────────────────────
+  const agregarProyecto = (p: any) => {
+    const id = p.proyecto_id || `temp-${Date.now()}`
+    if (proyectosSeleccionados.find(x => x.proyecto_id === id)) { toast.error('Ya fue agregado'); return }
+    setProyectosSeleccionados(prev => [...prev, {
+      proyecto_id: id, titulo: p.titulo, descripcion: p.descripcion || '',
+      tipo: p.tipo, prioridad: p.prioridad || 'media',
+      fecha_inicio: p.fecha_inicio || '', fecha_final: p.fecha_final || '',
+      actividades_programadas: p.actividades_programadas || [],
+      repuestos_requeridos: p.repuestos_requeridos || [],
+      costo: p.costo || 0, es_nuevo: p.es_nuevo ?? true
+    }])
+  }
+
+  const agregarOtroProyecto = (p: any) => {
+    const id = p.proyecto_id || `temp-${Date.now()}`
+    if (otrosProyectosSeleccionados.find(x => x.proyecto_id === id)) { toast.error('Ya fue agregado'); return }
+    setOtrosProyectosSeleccionados(prev => [...prev, {
+      proyecto_id: id, titulo: p.titulo, descripcion: p.descripcion || '',
+      tipo: p.tipo, prioridad: p.prioridad || 'media',
+      fecha_inicio: p.fecha_inicio || '', fecha_final: p.fecha_final || '',
+      actividades_programadas: p.actividades_programadas || [],
+      repuestos_requeridos: p.repuestos_requeridos || [],
+      costo: p.costo || 0, es_nuevo: p.es_nuevo ?? true
+    }])
+  }
+
   // ── Submit ──────────────────────────────────────────────────────────────────
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -503,7 +681,24 @@ export default function DetallesDocumentoPage({ backPath, nextBasePath }: Props)
           costo: m.costo, descripcion: m.descripcion,
           actividades_programadas: m.actividades_programadas,
           repuestos_requeridos: m.repuestos_requeridos
-        }))
+        })),
+        proyectos: proyectosSeleccionados.map(p => ({
+          proyecto_id: p.proyecto_id,
+          titulo: p.titulo, tipo: p.tipo, prioridad: p.prioridad,
+          fecha_inicio: p.fecha_inicio, fecha_final: p.fecha_final,
+          costo: p.costo, descripcion: p.descripcion,
+          actividades_programadas: p.actividades_programadas,
+          repuestos_requeridos: p.repuestos_requeridos
+        })),
+        otros_proyectos: otrosProyectosSeleccionados.map(p => ({
+          proyecto_id: p.proyecto_id,
+          titulo: p.titulo, tipo: p.tipo, prioridad: p.prioridad,
+          fecha_inicio: p.fecha_inicio, fecha_final: p.fecha_final,
+          costo: p.costo, descripcion: p.descripcion,
+          actividades_programadas: p.actividades_programadas,
+          repuestos_requeridos: p.repuestos_requeridos
+        })),
+        cotizaciones_origen: cotizacionesOrigen
       }
 
       let detError
@@ -618,14 +813,18 @@ export default function DetallesDocumentoPage({ backPath, nextBasePath }: Props)
 
           {/* Tabs */}
           <div>
-            <div className="border-b mb-4 flex gap-1">
-              {(['activos','mantenimientos','montajes'] as TabType[]).map(tab => (
-                <button key={tab} type="button" onClick={() => setActiveTab(tab)}
-                  className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors capitalize ${activeTab === tab ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+            <div className="border-b mb-4 flex gap-1 flex-wrap">
+              {([
+                { key: 'activos', label: `Activos (${activosSeleccionados.length})` },
+                { key: 'mantenimientos', label: `Mantenimientos (${mantenimientosSeleccionados.length})` },
+                { key: 'montajes', label: `Montajes (${montajesSeleccionados.length})` },
+                { key: 'proyectos', label: `Proyectos (${proyectosSeleccionados.length})` },
+                { key: 'otros_proyectos', label: `Otros proyectos (${otrosProyectosSeleccionados.length})` },
+              ] as { key: TabType; label: string }[]).map(({ key, label }) => (
+                <button key={key} type="button" onClick={() => setActiveTab(key)}
+                  className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${activeTab === key ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
                 >
-                  {tab === 'activos' && `Activos (${activosSeleccionados.length})`}
-                  {tab === 'mantenimientos' && `Mantenimientos (${mantenimientosSeleccionados.length})`}
-                  {tab === 'montajes' && `Montajes (${montajesSeleccionados.length})`}
+                  {label}
                 </button>
               ))}
             </div>
@@ -656,6 +855,24 @@ export default function DetallesDocumentoPage({ backPath, nextBasePath }: Props)
                   seleccionados={montajesSeleccionados}
                   onAgregar={agregarMontaje}
                   onEliminar={id => setMontajesSeleccionados(prev => prev.filter(m => m.montaje_id !== id))}
+                />
+              )}
+              {activeTab === 'proyectos' && (
+                <TabProyectos
+                  seleccionados={proyectosSeleccionados}
+                  onAgregar={agregarProyecto}
+                  onEliminar={id => setProyectosSeleccionados(prev => prev.filter(p => p.proyecto_id !== id))}
+                  titulo="Proyectos"
+                  color="violet"
+                />
+              )}
+              {activeTab === 'otros_proyectos' && (
+                <TabProyectos
+                  seleccionados={otrosProyectosSeleccionados}
+                  onAgregar={agregarOtroProyecto}
+                  onEliminar={id => setOtrosProyectosSeleccionados(prev => prev.filter(p => p.proyecto_id !== id))}
+                  titulo="Otros proyectos"
+                  color="teal"
                 />
               )}
             </div>
@@ -1188,6 +1405,140 @@ function TabMontajes({
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// ── Tab Proyectos / Otros proyectos ──────────────────────────────────────────
+// Reutilizable para "proyectos" y "otros_proyectos" con diferente color y título
+function TabProyectos({
+  seleccionados, onAgregar, onEliminar, titulo, color
+}: {
+  seleccionados: ProyectoDetalle[]
+  onAgregar: (p: any) => void
+  onEliminar: (id: string) => void
+  titulo: string
+  color: 'violet' | 'teal'
+}) {
+  const [mostrarForm, setMostrarForm] = useState(false)
+  const [form, setForm] = useState({
+    titulo: '', descripcion: '', tipo: 'interno', prioridad: 'media',
+    fecha_inicio: '', fecha_final: '', actividades_programadas: '', repuestos_requeridos: '', costo: 0
+  })
+
+  const colorMap = {
+    violet: { btn: 'bg-violet-600 hover:bg-violet-700', bg: 'bg-violet-50', badge: 'text-violet-700' },
+    teal:   { btn: 'bg-teal-600 hover:bg-teal-700',   bg: 'bg-teal-50',   badge: 'text-teal-700' },
+  }
+  const col = colorMap[color]
+
+  const agregar = () => {
+    if (!form.titulo) { toast.error('Título obligatorio'); return }
+    onAgregar({
+      proyecto_id: `temp-${Date.now()}`,
+      ...form,
+      actividades_programadas: form.actividades_programadas.split('\n').filter(Boolean),
+      repuestos_requeridos: form.repuestos_requeridos.split('\n').filter(Boolean),
+      costo: Number(form.costo) || 0,
+      es_nuevo: true
+    })
+    setForm({ titulo: '', descripcion: '', tipo: 'interno', prioridad: 'media', fecha_inicio: '', fecha_final: '', actividades_programadas: '', repuestos_requeridos: '', costo: 0 })
+    setMostrarForm(false)
+  }
+
+  return (
+    <div className="space-y-5">
+      {/* Lista */}
+      <div>
+        <h3 className="font-semibold text-sm text-gray-700 mb-3">{titulo} agregados</h3>
+        {seleccionados.length === 0 ? (
+          <p className="text-sm text-gray-400">Ningún elemento agregado</p>
+        ) : (
+          <div className="space-y-2">
+            {seleccionados.map(p => (
+              <div key={p.proyecto_id} className="border rounded-md p-3 bg-gray-50 flex justify-between items-start">
+                <div>
+                  <p className="font-medium text-sm">{p.titulo}</p>
+                  <p className={`text-xs ${col.badge} mt-0.5`}>{p.tipo} · {p.prioridad} · ${(Number(p.costo) || 0).toLocaleString('es-CO')}</p>
+                  {p.descripcion && <p className="text-xs text-gray-400 mt-0.5">{p.descripcion}</p>}
+                </div>
+                <button type="button" onClick={() => onEliminar(p.proyecto_id)} className="text-red-400 hover:text-red-600 ml-2">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Formulario nuevo */}
+      <div className="border-t pt-4">
+        {!mostrarForm ? (
+          <button type="button" onClick={() => setMostrarForm(true)} className={`px-4 py-2 ${col.btn} text-white rounded-md text-sm`}>
+            + Crear nuevo {titulo.toLowerCase().replace('otros ', '')}
+          </button>
+        ) : (
+          <div className={`${col.bg} p-4 rounded-md space-y-3`}>
+            <h3 className="font-semibold text-sm">Nuevo {titulo.toLowerCase().replace('otros ', '')}</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-medium block mb-1">Título *</label>
+                <input type="text" value={form.titulo} onChange={e => setForm({...form, titulo: e.target.value})} className="w-full px-3 py-2 border rounded text-sm" />
+              </div>
+              <div>
+                <label className="text-xs font-medium block mb-1">Costo</label>
+                <input type="number" min="0" value={form.costo || ''} onChange={e => setForm({...form, costo: parseFloat(e.target.value) || 0})} className="w-full px-3 py-2 border rounded text-sm" />
+              </div>
+              <div>
+                <label className="text-xs font-medium block mb-1">Tipo</label>
+                <select value={form.tipo} onChange={e => setForm({...form, tipo: e.target.value})} className="w-full px-3 py-2 border rounded text-sm">
+                  <option value="interno">Interno</option>
+                  <option value="externo">Externo</option>
+                  <option value="consultoría">Consultoría</option>
+                  <option value="desarrollo">Desarrollo</option>
+                  <option value="infraestructura">Infraestructura</option>
+                  <option value="otro">Otro</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-medium block mb-1">Prioridad</label>
+                <select value={form.prioridad} onChange={e => setForm({...form, prioridad: e.target.value})} className="w-full px-3 py-2 border rounded text-sm">
+                  <option value="baja">Baja</option>
+                  <option value="media">Media</option>
+                  <option value="alta">Alta</option>
+                  <option value="critica">Crítica</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-medium block mb-1">Fecha inicio</label>
+                <input type="date" value={form.fecha_inicio} onChange={e => setForm({...form, fecha_inicio: e.target.value})} className="w-full px-3 py-2 border rounded text-sm" />
+              </div>
+              <div>
+                <label className="text-xs font-medium block mb-1">Fecha final</label>
+                <input type="date" value={form.fecha_final} onChange={e => setForm({...form, fecha_final: e.target.value})} className="w-full px-3 py-2 border rounded text-sm" />
+              </div>
+            </div>
+            <div>
+              <label className="text-xs font-medium block mb-1">Descripción</label>
+              <textarea value={form.descripcion} onChange={e => setForm({...form, descripcion: e.target.value})} rows={2} className="w-full px-3 py-2 border rounded text-sm" />
+            </div>
+            <div>
+              <label className="text-xs font-medium block mb-1">Actividades (una por línea)</label>
+              <textarea value={form.actividades_programadas} onChange={e => setForm({...form, actividades_programadas: e.target.value})} rows={2} className="w-full px-3 py-2 border rounded text-sm" />
+            </div>
+            <div>
+              <label className="text-xs font-medium block mb-1">Repuestos / recursos (uno por línea)</label>
+              <textarea value={form.repuestos_requeridos} onChange={e => setForm({...form, repuestos_requeridos: e.target.value})} rows={2} className="w-full px-3 py-2 border rounded text-sm" />
+            </div>
+            <div className="flex gap-2">
+              <button type="button" onClick={agregar} className={`px-4 py-2 ${col.btn} text-white rounded text-sm`}>Agregar</button>
+              <button type="button" onClick={() => setMostrarForm(false)} className="px-4 py-2 border rounded text-sm hover:bg-white">Cancelar</button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

@@ -582,7 +582,12 @@ export default function TotalesDocumentoPage() {
                   {activos.map((activo, index) => (
                     <tr key={index}>
                       <td>
-                        <div className="font-medium">{activo.nombre}</div>
+                       
+                        <button
+                        onClick={() => router.push(`/dashboard/activos/${activo.activo_id}`)}
+                        className="font-medium text-blue-500 underline cursor-pointer">
+                          
+                          {activo.nombre}</button>
                         {(Number(activo.dias_totales) || 0) > 0 && (
                           <div className="text-xs text-gray-400 mt-0.5">{desgloseActivo(activo)}</div>
                         )}

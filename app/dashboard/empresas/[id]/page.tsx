@@ -56,6 +56,7 @@ import {
   ShoppingCart,
   Lock,
   EyeOff,
+  BookOpen,
 } from "lucide-react"
 
 interface DocumentoAdjunto {
@@ -511,10 +512,12 @@ export default function EmpresaDetailPage() {
             <Edit className="mr-1 h-4 w-4" />
             Editar
           </Button>
-          <Button variant="destructive" size="sm" onClick={deleteEmpresa}>
+          <button 
+          className="bg-red-500 text-white px-3 py-1.5 rounded-xl flex items-center gap-x-2 cursor-pointer"
+          onClick={deleteEmpresa}>
             <Trash2 className="mr-1 h-4 w-4" />
             Eliminar
-          </Button>
+          </button>
         </div>
       </div>
 
@@ -632,6 +635,18 @@ export default function EmpresaDetailPage() {
                 <div>
                   <p className="text-sm text-muted-foreground">Fecha de Registro</p>
                   <p className="font-medium">{formatDate(empresa.created_at)}</p>
+                </div>
+              </div>
+            )}
+
+            {empresa.nombre_ordenes && (
+              <div className="flex items-start gap-3">
+                <div className="mt-1">
+                  <BookOpen className="h-5 w-5 text-muted-foreground" />
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Nombre de Órdenes</p>
+                  <p className="font-medium">{empresa.nombre_ordenes}</p>
                 </div>
               </div>
             )}

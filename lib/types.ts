@@ -15,6 +15,7 @@ export type Empresa = {
   updated_at: string
   logo_path: string | null
   documentos_paths: string[]
+  nombre_ordenes: string
 }
 
 export type Contacto = {
@@ -124,30 +125,34 @@ export type Mantenimiento = {
   prioridad: "baja" | "media" | "alta" | "critica"
   fecha_inicio: string | null
   fecha_final: string | null
-  actividades_programadas: { actividad: string; completada: boolean }[]
+  actividades_programadas: {nombre: string; completada: boolean}[]
+  repuestos_requeridos: {nombre: string; cantidad: number; unidad: string}[]
+ 
+  archivo_adjunto: string | null
+  created_at: string
+  updated_at: string
+  empresas?: Empresa
+
+
+}
+
+export type Montaje = {
+  id: string
+  titulo: string
+  descripcion: string | null
+  cliente_id: string | null
+  nombre_cliente: string | null
+  tipo: "preventivo" | "correctivo" | "predictivo" | "emergencia"
+  prioridad: "baja" | "media" | "alta" | "critica"
+  fecha_inicio: string | null
+  fecha_final: string | null
+  actividades_programadas: { nombre: string; actividad: string; completada: boolean }[]
   repuestos_requeridos: { nombre: string; cantidad: number; notas: string }[]
   archivo_adjunto: string | null
   created_at: string
   updated_at: string
   empresas?: Empresa
-}
-
-export type Montaje = {
-  id: string
-  tipo: string | null
-  numero: string | null
-  fecha: string | null
-  fecha_inicio: string | null
-  fecha_fin: string | null
-  empresa_id: string | null
-  nombre_empresa_cliente: string | null
-  telefono_empresa_cliente: string | null
-  correo_empresa_cliente: string | null
-  direccion_empresa_cliente: string | null
-  nit_empresa_cliente: string | null
   estado: "pendiente" | "en_proceso" | "completado" | "cancelado"
-  created_at: string
-  updated_at: string
 }
 
 export type DocumentoComercial = {

@@ -1,3 +1,4 @@
+// app/dashboard/ordenes/page.tsx
 'use client'
 import { supabase } from '@/lib/supabase'
 import { useState, useEffect, useCallback } from 'react'
@@ -14,6 +15,7 @@ interface Documento {
   empresa: { razon_social: string; nit: string }
   total?: number
   documento_relacionado_id?: string | null
+  cotizaciones_origen?: { id: string; numero_documento: string }[]
 }
 
 interface Cotizacion {
@@ -67,6 +69,8 @@ export default function OrdenesPage() {
   const [cotizaciones, setCotizaciones] = useState<Cotizacion[]>([])
   const [loadingModal, setLoadingModal] = useState(false)
   const [busquedaModal, setBusquedaModal] = useState('')
+  // Multi-selección de cotizaciones
+  const [cotSeleccionadas, setCotSeleccionadas] = useState<Set<string>>(new Set())
 
   const cargarOrdenes = useCallback(async () => {
     try {
@@ -78,10 +82,16 @@ export default function OrdenesPage() {
       if (error) throw error
 
       const conTotales = await Promise.all((data || []).map(async (doc) => {
-        const { data: t } = await supabase
-          .from('totales_documentos_comerciales')
-          .select('total').eq('documento_comercial_id', doc.id).single()
-        return { ...doc, empresa: doc.empresa as any, total: t?.total }
+        const [totRes, detRes] = await Promise.all([
+          supabase.from('totales_documentos_comerciales').select('total').eq('documento_comercial_id', doc.id).maybeSingle(),
+          supabase.from('detalles_documentos_comerciales').select('cotizaciones_origen').eq('documento_comercial_id', doc.id).maybeSingle(),
+        ])
+        return {
+          ...doc,
+          empresa: doc.empresa as any,
+          total: totRes.data?.total,
+          cotizaciones_origen: (detRes.data?.cotizaciones_origen as { id: string; numero_documento: string }[]) || []
+        }
       }))
       setOrdenes(conTotales)
     } catch (e) {
@@ -107,7 +117,7 @@ export default function OrdenesPage() {
       const conTotales = await Promise.all((data || []).map(async (doc) => {
         const { data: t } = await supabase
           .from('totales_documentos_comerciales')
-          .select('total').eq('documento_comercial_id', doc.id).single()
+          .select('total').eq('documento_comercial_id', doc.id).maybeSingle()
         return { ...doc, empresa: doc.empresa as any, total: t?.total }
       }))
       setCotizaciones(conTotales)
@@ -120,12 +130,24 @@ export default function OrdenesPage() {
 
   const abrirModal = () => {
     setModalAbierto(true)
+    setCotSeleccionadas(new Set())
     cargarCotizaciones()
   }
 
-  const seleccionarCotizacion = (cotId: string) => {
+  const toggleCotizacion = (id: string) => {
+    setCotSeleccionadas(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  const confirmarCotizaciones = () => {
+    if (cotSeleccionadas.size === 0) { toast.error('Selecciona al menos una cotización'); return }
+    const ids = Array.from(cotSeleccionadas)
     setModalAbierto(false)
-    router.push(`/dashboard/ordenes/nuevo?doc_relacionado_id=${cotId}`)
+    setCotSeleccionadas(new Set())
+    router.push(`/dashboard/ordenes/nuevo?doc_relacionado_id=${ids[0]}&cotizaciones_extra=${ids.slice(1).join(',')}`)
   }
 
   const cambiarEstado = async (id: string, nuevoEstado: string) => {
@@ -214,17 +236,13 @@ export default function OrdenesPage() {
               <p className="text-sm text-gray-500 mt-0.5">Documentos tipo OC</p>
             </div>
             <div className="flex gap-2">
-              {/* Botón sincronizar */}
               <button
                 onClick={sincronizarEstados}
                 disabled={sincronizando}
                 className="px-4 py-2 border border-gray-300 text-gray-600 rounded-md hover:bg-gray-50 flex items-center gap-2 text-sm font-medium transition-colors disabled:opacity-50"
                 title="Recalcular estados según fechas de inicio y fin"
               >
-                <svg
-                  className={`w-4 h-4 ${sincronizando ? 'animate-spin' : ''}`}
-                  fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                >
+                <svg className={`w-4 h-4 ${sincronizando ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                 </svg>
                 {sincronizando ? 'Sincronizando...' : 'Sincronizar'}
@@ -313,7 +331,7 @@ export default function OrdenesPage() {
                   <th className="px-4 py-3 w-10">
                     <input type="checkbox" checked={todosSeleccionados} onChange={toggleTodos} className="w-4 h-4 accent-blue-600 cursor-pointer" />
                   </th>
-                  {['Número', 'Empresa', 'Fecha', 'Estado', 'Total', ''].map(h => (
+                  {['Número', 'Empresa', 'Fecha', 'Estado', 'Cotizaciones', 'Total', ''].map(h => (
                     <th key={h} className={`px-6 py-3 text-xs font-semibold text-gray-500 uppercase ${h === 'Total' || h === '' ? 'text-right' : 'text-left'}`}>{h}</th>
                   ))}
                 </tr>
@@ -339,8 +357,6 @@ export default function OrdenesPage() {
                       <td className="px-6 py-4 text-sm text-gray-600 whitespace-nowrap">
                         {new Date(doc.fecha_emision + 'T00:00:00').toLocaleDateString('es-CO')}
                       </td>
-
-                      {/* Estado editable */}
                       <td className="px-6 py-4">
                         <select
                           value={doc.estado}
@@ -351,13 +367,29 @@ export default function OrdenesPage() {
                           {ESTADOS_MANUALES.map(e => (
                             <option key={e} value={e}>{ESTADOS_LABEL[e]}</option>
                           ))}
-                          {/* Mostrar estado actual si no está en la lista manual (ej: borrador, enviado) */}
                           {!ESTADOS_MANUALES.includes(doc.estado) && (
                             <option value={doc.estado}>{ESTADOS_LABEL[doc.estado] || doc.estado}</option>
                           )}
                         </select>
                       </td>
-
+                      <td className="px-6 py-4">
+                        {doc.cotizaciones_origen && doc.cotizaciones_origen.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {doc.cotizaciones_origen.map(cot => (
+                              <button
+                                key={cot.id}
+                                onClick={() => router.push(`/dashboard/cotizaciones/${cot.id}/totales`)}
+                                className="text-xs bg-indigo-50 text-indigo-600 hover:bg-indigo-100 hover:text-indigo-800 px-2 py-0.5 rounded font-mono transition-colors"
+                                title={`Ver cotización ${cot.numero_documento}`}
+                              >
+                                {cot.numero_documento}
+                              </button>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-gray-300 text-xs">—</span>
+                        )}
+                      </td>
                       <td className="px-6 py-4 text-right font-semibold text-sm">
                         {doc.total != null
                           ? `$${Number(doc.total).toLocaleString('es-CO', { minimumFractionDigits: 2 })}`
@@ -394,16 +426,16 @@ export default function OrdenesPage() {
         )}
       </div>
 
-      {/* Modal cotizaciones */}
+      {/* Modal cotizaciones — multi-selección */}
       {modalAbierto && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col">
             <div className="p-5 border-b flex items-center justify-between">
               <div>
                 <h2 className="text-lg font-bold">Seleccionar Cotización</h2>
-                <p className="text-sm text-gray-500">La OC heredará todos los datos de la cotización</p>
+                <p className="text-sm text-gray-500">Selecciona una o más cotizaciones para combinar en la OC</p>
               </div>
-              <button onClick={() => setModalAbierto(false)} className="text-gray-400 hover:text-gray-600 transition-colors">
+              <button onClick={() => { setModalAbierto(false); setCotSeleccionadas(new Set()) }} className="text-gray-400 hover:text-gray-600 transition-colors">
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
@@ -425,39 +457,58 @@ export default function OrdenesPage() {
               ) : cotizacionesFiltradas.length === 0 ? (
                 <div className="p-8 text-center text-gray-400 text-sm">No hay cotizaciones disponibles</div>
               ) : (
-                cotizacionesFiltradas.map(cot => (
-                  <div
-                    key={cot.id}
-                    onClick={() => seleccionarCotizacion(cot.id)}
-                    className="px-5 py-4 border-b hover:bg-indigo-50 cursor-pointer transition-colors flex items-center justify-between group"
-                  >
-                    <div>
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <span className="font-mono font-semibold text-sm">{cot.numero_documento}</span>
-                        <span className={`text-xs px-1.5 py-0.5 rounded capitalize ${ESTADO_COLORS[cot.estado] || ''}`}>{cot.estado}</span>
+                cotizacionesFiltradas.map(cot => {
+                  const seleccionada = cotSeleccionadas.has(cot.id)
+                  return (
+                    <div
+                      key={cot.id}
+                      onClick={() => toggleCotizacion(cot.id)}
+                      className={`px-5 py-4 border-b cursor-pointer transition-colors flex items-center gap-4 ${seleccionada ? 'bg-indigo-50 border-l-4 border-l-indigo-500' : 'hover:bg-gray-50'}`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={seleccionada}
+                        onChange={() => toggleCotizacion(cot.id)}
+                        onClick={e => e.stopPropagation()}
+                        className="w-4 h-4 accent-indigo-600 shrink-0"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <span className="font-mono font-semibold text-sm">{cot.numero_documento}</span>
+                          <span className={`text-xs px-1.5 py-0.5 rounded capitalize ${ESTADO_COLORS[cot.estado] || ''}`}>{cot.estado}</span>
+                        </div>
+                        <p className="text-sm text-gray-600 truncate">{cot.empresa.razon_social}</p>
+                        <p className="text-xs text-gray-400">{new Date(cot.fecha_emision + 'T00:00:00').toLocaleDateString('es-CO')}</p>
                       </div>
-                      <p className="text-sm text-gray-600">{cot.empresa.razon_social}</p>
-                      <p className="text-xs text-gray-400">{new Date(cot.fecha_emision + 'T00:00:00').toLocaleDateString('es-CO')}</p>
-                    </div>
-                    <div className="flex items-center gap-3">
                       {cot.total != null && (
-                        <span className="text-sm font-semibold text-gray-700">
+                        <span className="text-sm font-semibold text-gray-700 shrink-0">
                           ${Number(cot.total).toLocaleString('es-CO', { minimumFractionDigits: 2 })}
                         </span>
                       )}
-                      <svg className="w-5 h-5 text-gray-300 group-hover:text-indigo-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                      </svg>
                     </div>
-                  </div>
-                ))
+                  )
+                })
               )}
             </div>
 
-            <div className="p-4 border-t bg-gray-50 text-right">
-              <button onClick={() => setModalAbierto(false)} className="px-4 py-2 border rounded-md text-sm hover:bg-white transition-colors">
-                Cancelar
-              </button>
+            <div className="p-4 border-t bg-gray-50 flex items-center justify-between">
+              <span className="text-sm text-gray-500">
+                {cotSeleccionadas.size > 0
+                  ? `${cotSeleccionadas.size} cotización${cotSeleccionadas.size > 1 ? 'es' : ''} seleccionada${cotSeleccionadas.size > 1 ? 's' : ''}`
+                  : 'Ninguna seleccionada'}
+              </span>
+              <div className="flex gap-2">
+                <button onClick={() => { setModalAbierto(false); setCotSeleccionadas(new Set()) }} className="px-4 py-2 border rounded-md text-sm hover:bg-white transition-colors">
+                  Cancelar
+                </button>
+                <button
+                  onClick={confirmarCotizaciones}
+                  disabled={cotSeleccionadas.size === 0}
+                  className="px-4 py-2 bg-indigo-600 text-white rounded-md text-sm font-medium hover:bg-indigo-700 disabled:opacity-40 transition-colors"
+                >
+                  Agregar {cotSeleccionadas.size > 1 ? `${cotSeleccionadas.size} cotizaciones` : 'cotización'} →
+                </button>
+              </div>
             </div>
           </div>
         </div>
