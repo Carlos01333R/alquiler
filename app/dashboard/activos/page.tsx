@@ -116,12 +116,16 @@ export default function ActivosPage() {
           <p className="text-muted-foreground">Equipos, herramientas y sets de activos</p>
         </div>
         <div className="flex gap-2">
-          <Button onClick={() => router.push("/dashboard/activos/nuevo")} >
+          <button
+          className="bg-[#009966] text-white flex items-center gap-x-2 px-3 py-1.5 cursor-pointer rounded-lg"
+          onClick={() => router.push("/dashboard/activos/nuevo")} >
             <Plus className="mr-2 h-4 w-4 text-white" />
          
           Nuevo Activo
-          </Button>
-          <Button variant="outline" onClick={() => router.push("/dashboard/activos/nuevo-set")}>
+          </button>
+          <Button 
+          className="cursor-pointer"
+          variant="outline" onClick={() => router.push("/dashboard/activos/nuevo-set")}>
             <Plus className="mr-2 h-4 w-4" />
             Nuevo Set
           </Button>

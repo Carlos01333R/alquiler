@@ -38,7 +38,7 @@ export default function FacturasPage() {
       const { data, error } = await supabase
         .from('documentos_comerciales')
         .select('*, empresa:empresas(razon_social, nit)')
-        .eq('tipo_documento', 'factura')
+        .eq('tipo_documento', 'otros_documentos')
         .order('created_at', { ascending: false })
       if (error) throw error
 
@@ -106,17 +106,17 @@ export default function FacturasPage() {
         <div className="p-6 border-b">
           <div className="flex justify-between items-center mb-4">
             <div>
-              <h1 className="text-2xl font-bold">Facturas</h1>
-              <p className="text-sm text-gray-500 mt-0.5">Documentos tipo FAC</p>
+              <h1 className="text-2xl font-bold">Otros Documentos</h1>
+              <p className="text-sm text-gray-500 mt-0.5">Documentos tipo OTRO</p>
             </div>
             <button
-              onClick={() => router.push('/dashboard/facturas/nuevo')}
+              onClick={() => router.push('/dashboard/otros_documentos/nuevo')}
               className="px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 flex items-center gap-2 text-sm font-medium transition-colors"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
               </svg>
-              Nueva Factura
+              Nuevo Documento
             </button>
           </div>
 
@@ -157,7 +157,7 @@ export default function FacturasPage() {
           {loading ? (
             <div className="p-12 text-center text-gray-400">Cargando...</div>
           ) : filtradas.length === 0 ? (
-            <div className="p-12 text-center text-gray-400">No hay facturas</div>
+            <div className="p-12 text-center text-gray-400">No hay documentos</div>
           ) : (
             <table className="w-full">
               <thead className="bg-gray-50 border-b">
@@ -194,9 +194,9 @@ export default function FacturasPage() {
                       </td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-3">
-                          <button onClick={() => router.push(`/dashboard/facturas/${doc.id}/totales`)} className="text-emerald-600 hover:text-emerald-800 text-sm font-medium">Ver</button>
+                          <button onClick={() => router.push(`/dashboard/otros_documentos/${doc.id}/totales`)} className="text-emerald-600 hover:text-emerald-800 text-sm font-medium">Ver</button>
                           <button
-                            onClick={() => router.push(`/dashboard/facturas/${doc.id}/detalles?empresa_id=${doc.empresa_id}&modo=editar`)}
+                            onClick={() => router.push(`/dashboard/otros_documentos/${doc.id}/detalles?empresa_id=${doc.empresa_id}&modo=editar`)}
                             className="text-gray-400 hover:text-emerald-600 transition-colors"
                             title="Editar"
                           >

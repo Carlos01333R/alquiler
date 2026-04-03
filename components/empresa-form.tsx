@@ -283,7 +283,7 @@ export function EmpresaForm({ empresa }: EmpresaFormProps) {
   }
 
   return (
-    <form onSubmit={handleSubmit}>
+    <form onSubmit={handleSubmit} className="w-[90%] md:max-w-5xl mx-auto">
       <Card>
         <CardHeader>
           <CardTitle>{isEdit ? "Editar Empresa" : "Nueva Empresa"}</CardTitle>
@@ -543,17 +543,17 @@ export function EmpresaForm({ empresa }: EmpresaFormProps) {
 
           {/* Botones */}
           <div className="flex gap-3 justify-end">
-            <Button
+            <button
               type="submit"
               disabled={saving || uploading}
-              className="min-w-32"
+              className="bg-[#009966] text-white flex items-center gap-x-2 px-3 py-1.5 rounded-lg cursor-pointer"
             >
               {saving || uploading
                 ? "Guardando..."
                 : isEdit
                 ? "Actualizar"
                 : "Crear Empresa"}
-            </Button>
+            </button>
             <Button
               type="button"
               variant="outline"

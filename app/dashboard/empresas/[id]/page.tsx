@@ -832,9 +832,11 @@ export default function EmpresaDetailPage() {
                       onChange={(e) => setContactForm((p) => ({ ...p, cargo: e.target.value }))}
                     />
                   </div>
-                  <Button onClick={addContact} className="w-full">
+                  <button
+                    className=" bg-[#009966] text-white flex items-center gap-x-2 px-3 py-1.5 rounded-lg cursor-pointer mx-auto"
+                  onClick={addContact} >
                     Guardar Contacto
-                  </Button>
+                  </button>
                 </div>
               </DialogContent>
             </Dialog>
@@ -892,7 +894,7 @@ export default function EmpresaDetailPage() {
         <TabsContent value="usuarios" className="mt-4 space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-foreground">Usuarios de la Empresa</h2>
-            <Dialog open={usuarioOpen} onOpenChange={setUsuarioOpen}>
+            <Dialog open={usuarioOpen} onOpenChange={setUsuarioOpen} >
               <DialogTrigger asChild>
                 <Button size="sm">
                   <Plus className="mr-1 h-4 w-4" />
@@ -948,9 +950,11 @@ export default function EmpresaDetailPage() {
                       </SelectContent>
                     </Select>
                   </div>
-                  <Button onClick={addUsuario} className="w-full">
+                  <button
+                    className="bg-[#009966] text-white flex items-center gap-x-2 px-3 py-1.5 rounded-lg cursor-pointer mx-auto"
+                  onClick={addUsuario} >
                     Guardar Usuario
-                  </Button>
+                  </button>
                 </div>
               </DialogContent>
             </Dialog>

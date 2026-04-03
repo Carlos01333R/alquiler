@@ -62,10 +62,12 @@ export default function EmpresasPage() {
           <h1 className="text-2xl font-bold tracking-tight text-foreground">Empresas</h1>
           <p className="text-muted-foreground">Gestion de empresas y clientes</p>
         </div>
-        <Button onClick={() => router.push("/dashboard/empresas/nueva")}>
+        <button
+        className="bg-[#009966] text-white flex items-center gap-x-2 px-3 py-1.5 rounded-lg cursor-pointer"
+        onClick={() => router.push("/dashboard/empresas/nueva")}>
           <Plus className="mr-2 h-4 w-4" />
           Nueva Empresa
-        </Button>
+        </button>
       </div>
       <DataTable
         data={empresas as unknown as Record<string, unknown>[]}

@@ -17,15 +17,15 @@ import type { Empresa } from '@/types/database.types'
 import { toast } from 'sonner'
 
 interface Props {
-  tipo: 'orden_compra' | 'cotizacion' | 'factura'
-  prefix: 'OC' | 'COT' | 'FAC'
+  tipo: 'orden_compra' | 'cotizacion' | 'otros_documentos'
+  prefix: 'OC' | 'COT' | 'OTR'
   backPath: string
 }
 
 const TIPO_LABEL: Record<string, string> = {
   orden_compra: 'Orden de Compra',
   cotizacion: 'Cotización',
-  factura: 'Factura',
+  factura: 'otros_documentos',
 }
 
 const ACCENT: Record<string, string> = {
@@ -58,6 +58,7 @@ export default function NuevoDocumentoPage({ tipo, prefix, backPath }: Props) {
   const [formData, setFormData] = useState({
     numero_documento: `${prefix}-${generarSufijo()}`,
     tipo_documento: tipo,
+    subtipo_documento: '',  
     empresa_id: '',
     fecha_emision: obtenerFechaColombia(),
     estado: tipo === 'orden_compra' ? 'pendiente' : 'por_definir',
@@ -98,14 +99,17 @@ export default function NuevoDocumentoPage({ tipo, prefix, backPath }: Props) {
     setLoading(true)
 
     try {
-      const insert: any = {
-        numero_documento: formData.numero_documento,
-        tipo_documento: formData.tipo_documento,
-        empresa_id: formData.empresa_id,
-        fecha_emision: formData.fecha_emision,
-        estado: formData.estado,
-        observaciones: formData.observaciones || null,
-      }
+     const insert: any = {
+      numero_documento: formData.numero_documento,
+      tipo_documento: formData.tipo_documento,
+      ...(tipo === 'otros_documentos' && formData.subtipo_documento
+        ? { subtipo_documento: formData.subtipo_documento }
+        : {}),
+      empresa_id: formData.empresa_id,
+      fecha_emision: formData.fecha_emision,
+      estado: formData.estado,
+      observaciones: formData.observaciones || null,
+    }
       if (formData.documento_relacionado_id) {
         insert.documento_relacionado_id = formData.documento_relacionado_id
       }
@@ -194,6 +198,15 @@ const LABELS_DOC: Record<typeof ESTADOS_DOC[number], string> = {
                   className="w-full px-3 py-2 border rounded-md text-sm focus:ring-2 focus:ring-blue-500"
                 />
               </div>
+
+
+           
+              {/* Solo visible para otros_documentos */}
+
+            </div>
+          </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 ">
               <div>
                 <label className="block text-sm font-medium mb-1">Estado *</label>
                 <select
@@ -213,8 +226,22 @@ const LABELS_DOC: Record<typeof ESTADOS_DOC[number], string> = {
                 ))}
                 </select>
               </div>
+              {tipo === 'otros_documentos' && (
+              <div className="">
+                <label className="block text-sm font-medium mb-1">
+                  Tipo de documento <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ej: Acta de reunión, Contrato, Certificado..."
+                  value={formData.subtipo_documento}
+                  onChange={e => setFormData({ ...formData, subtipo_documento: e.target.value })}
+                  className="w-full px-3 py-2 border rounded-md text-sm focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            )}
             </div>
-          </div>
 
           {/* Empresa */}
           <div className="border-b pb-5">

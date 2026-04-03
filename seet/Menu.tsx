@@ -38,7 +38,7 @@ export const MenuItems = [
        submenu: [
          { id: 'orden_compra', label: 'Orden de Compra', icon: FileText, section: 'ordenes', href: '/dashboard/ordenes' },
          { id: 'cotizacion', label: 'Cotización', icon: FileText, section: 'cotizaciones', href: '/dashboard/cotizaciones' },
-         { id: 'factura', label: 'Factura', icon: FileText, section: 'facturas', href: '/dashboard/facturas' },
+         { id: 'otros_documentos', label: 'Otros documentos', icon: FileText, section: 'otros_documentos', href: '/dashboard/otros_documentos' },
        
        ]
      },

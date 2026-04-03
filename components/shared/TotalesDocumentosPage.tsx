@@ -345,7 +345,7 @@ export default function TotalesDocumentoPage() {
       toast.success('Documento guardado exitosamente')
       const tipo = documento?.tipo_documento
       if (tipo === 'cotizacion') router.push('/dashboard/cotizaciones')
-      else if (tipo === 'factura') router.push('/dashboard/facturas')
+      else if (tipo === 'otros_documentos') router.push('/dashboard/otros_documentos')
       else router.push('/dashboard/ordenes')
     } catch (error) {
       console.error('Error guardando totales:', error)

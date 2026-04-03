@@ -409,7 +409,7 @@ export function ActivoForm({ activo }: ActivoFormProps) {
   }
 
   return (
-    <form onSubmit={handleSubmit}>
+    <form onSubmit={handleSubmit} className=" bg-white p-6 rounded-xl shadow-md">
       <Card>
         <CardHeader>
           <CardTitle>{isEdit ? "Editar Activo" : "Nuevo Activo"}</CardTitle>
@@ -715,25 +715,26 @@ export function ActivoForm({ activo }: ActivoFormProps) {
 
           {/* Botones */}
           <div className="flex gap-3 justify-end">
-            <Button
+            <button
+             className="bg-[#009966] text-white flex items-center gap-x-2 px-3 py-1.5 cursor-pointer rounded-lg "
               type="submit"
               disabled={saving || uploading}
-              className="min-w-32"
+            
             >
               {saving || uploading
                 ? "Guardando..."
                 : isEdit
                 ? "Actualizar"
                 : "Crear Activo"}
-            </Button>
-            <Button
+            </button>
+            <button
               type="button"
-              variant="outline"
+              className="bg-red-500 text-white flex items-center gap-x-2 px-3 py-1.5 cursor-pointer rounded-lg "
               onClick={() => router.back()}
               disabled={saving || uploading}
             >
               Cancelar
-            </Button>
+            </button>
           </div>
         </CardContent>
       </Card>

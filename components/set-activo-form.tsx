@@ -497,7 +497,7 @@ export function SetActivoForm({ set }: SetActivoFormProps) {
   }
 
   return (
-    <form onSubmit={handleSubmit}>
+    <form onSubmit={handleSubmit} className=" bg-white p-6 rounded-xl shadow-md">
       <Card>
         <CardHeader>
           <CardTitle>{isEdit ? "Editar Set de Activos" : "Nuevo Set de Activos"}</CardTitle>
