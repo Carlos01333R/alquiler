@@ -324,23 +324,52 @@ export default function TotalesDocumentoPage() {
       if (error) throw error
 
       if (documento?.tipo_documento === 'orden_compra' && detalle) {
-        const activosDoc = (detalle.activos_seleccionados as unknown as ActivoSeleccionado[]) || []
-        if (activosDoc.length > 0) {
-          const ids = activosDoc.map(a => a.activo_id)
-          const { error: activosError } = await supabase
-            .from('activos').update({ estado_disponibilidad: 'alquilado' }).in('id', ids)
-          if (activosError) {
-            toast.warning('Documento guardado, pero hubo un error al actualizar el estado de algunos activos')
-            router.push('/dashboard/ordenes')
-            return
-          }
-          toast.success(`Orden guardada. ${ids.length} activo${ids.length !== 1 ? 's' : ''} marcado${ids.length !== 1 ? 's' : ''} como alquilado`)
-        } else {
-          toast.success('Orden de compra guardada')
-        }
-        router.push('/dashboard/ordenes')
-        return
-      }
+  const activosDoc = (detalle.activos_seleccionados as unknown as ActivoSeleccionado[]) || []
+  
+  if (activosDoc.length > 0) {
+    const ids = activosDoc.map(a => a.activo_id)
+
+    // Consultar cuáles IDs existen en cada tabla
+    const [{ data: idsEnActivos }, { data: idsEnSets }] = await Promise.all([
+      supabase.from('activos').select('id').in('id', ids),
+      supabase.from('sets_activos').select('id').in('id', ids),
+    ])
+
+    const errores: string[] = []
+
+    // Actualizar activos normales
+    if (idsEnActivos && idsEnActivos.length > 0) {
+      const { error } = await supabase
+        .from('activos')
+        .update({ estado_disponibilidad: 'alquilado' })
+        .in('id', idsEnActivos.map(a => a.id))
+      if (error) errores.push('activos')
+    }
+
+    // Actualizar sets de activos
+    if (idsEnSets && idsEnSets.length > 0) {
+      const { error } = await supabase
+        .from('sets_activos')
+        .update({ estado_disponibilidad: 'alquilado' })
+        .in('id', idsEnSets.map(s => s.id))
+      if (error) errores.push('sets')
+    }
+
+    if (errores.length > 0) {
+      toast.warning(`Documento guardado, pero hubo un error al actualizar: ${errores.join(', ')}`)
+    } else {
+      const total = (idsEnActivos?.length ?? 0) + (idsEnSets?.length ?? 0)
+      toast.success(
+        `Orden guardada. ${total} ítem${total !== 1 ? 's' : ''} marcado${total !== 1 ? 's' : ''} como alquilado`
+      )
+    }
+  } else {
+    toast.success('Orden de compra guardada')
+  }
+
+  router.push('/dashboard/ordenes')
+  return
+}
 
       toast.success('Documento guardado exitosamente')
       const tipo = documento?.tipo_documento
