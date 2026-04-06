@@ -25,13 +25,13 @@ interface Props {
 const TIPO_LABEL: Record<string, string> = {
   orden_compra: 'Orden de Compra',
   cotizacion: 'Cotización',
-  factura: 'otros_documentos',
+  otros_documentos: 'otros_documentos',
 }
 
 const ACCENT: Record<string, string> = {
   orden_compra: 'bg-blue-600 hover:bg-blue-700',
   cotizacion: 'bg-yellow-500 hover:bg-yellow-600',
-  factura: 'bg-emerald-600 hover:bg-emerald-700',
+  otros_documentos: 'bg-emerald-600 hover:bg-emerald-700',
 }
 
 function obtenerFechaColombia() {

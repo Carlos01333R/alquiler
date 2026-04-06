@@ -24,14 +24,16 @@ export default function Login() {
     }
   }, [isLoading, user, router])
 
-  const handleSubmit = async (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
     setLoading(true)
-    const ok = await login(email, password)
+    const result = await login(email, password)
     setLoading(false)
-    if (ok) {
+    if (result.success) {
       router.replace("/")
+    } else if (result.unauthorized) {
+      setError("No tienes permiso para acceder a esta aplicación")
     } else {
       setError("Usuario o contraseña incorrectos")
     }

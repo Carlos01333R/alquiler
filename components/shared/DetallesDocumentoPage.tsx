@@ -1287,7 +1287,7 @@ function TabMantenimientos({
       </div>
 
       {mantenimientosDB.filter(m => !seleccionados.some(s => s.mantenimiento_id === m.id)).length > 0 && (
-        <div className="border-t pt-4">
+        <div className="border-t pt-4 hidden">
           <h3 className="font-semibold text-sm text-gray-700 mb-2">Seleccionar existentes</h3>
           <div className="max-h-40 overflow-y-auto border rounded-md">
             {mantenimientosDB.filter(m => !seleccionados.some(s => s.mantenimiento_id === m.id)).map(m => (
@@ -1390,7 +1390,7 @@ function TabMontajes({
       </div>
 
       {montajesDB.filter(m => !seleccionados.some(s => s.montaje_id === m.id)).length > 0 && (
-        <div className="border-t pt-4">
+        <div className="border-t pt-4 hidden">
           <h3 className="font-semibold text-sm text-gray-700 mb-2">Seleccionar existentes</h3>
           <div className="max-h-40 overflow-y-auto border rounded-md">
             {montajesDB.filter(m => !seleccionados.some(s => s.montaje_id === m.id)).map(m => (
