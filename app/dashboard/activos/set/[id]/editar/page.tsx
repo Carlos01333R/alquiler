@@ -7,6 +7,7 @@ import type { SetActivo } from "@/lib/types"
 import { SetActivoForm } from "@/components/set-activo-form"
 import { Button } from "@/components/ui/button"
 import { ArrowLeft } from "lucide-react"
+import BackButton from "@/components/BackBotton"
 
 export default function SetActivoEditPage() {
   const params = useParams()
@@ -59,16 +60,10 @@ export default function SetActivoEditPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="w-[90%] md:max-w-5xl mx-auto ">
       <div className="flex items-center gap-4">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => router.push(`/dashboard/activos`)}
-        >
-          <ArrowLeft className="mr-1 h-4 w-4" />
-          Volver 
-        </Button>
+      
+        <BackButton href={`/dashboard/activos`} label="Volver" />
       </div>
 
       <SetActivoForm set={set} />

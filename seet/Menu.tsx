@@ -32,7 +32,7 @@ export const MenuItems = [
   },
   
   {
-       id: 'admin',
+       id: 'Documento',
        label: 'Documentos',
        icon: Settings,
        submenu: [

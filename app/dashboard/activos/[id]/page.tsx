@@ -26,8 +26,10 @@ import {
   Boxes,
   FileCheck,
   Activity,
+  DollarSign,
 } from "lucide-react"
 import Image from "next/image"
+import BackButton from "@/components/BackBotton"
 
 interface DocumentoAdjunto {
   id: string
@@ -263,28 +265,26 @@ export default function ActivoDetailPage() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <Button variant="ghost" size="sm" onClick={() => router.push("/dashboard/activos")}>
-          <ArrowLeft className="mr-1 h-4 w-4" />
-          Volver
-        </Button>
+        <BackButton href={`/dashboard/activos`} label="Volver" />
         <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
+          <button
+             className="bg-white text-black px-3 py-1.5 rounded-lg cursor-pointer flex items-center gap-x-2 shadow-2xl"
             onClick={() => router.push(`/dashboard/activos/${id}/editar`)}
           >
             <Edit className="mr-1 h-4 w-4" />
             Editar
-          </Button>
-          <Button variant="destructive" size="sm" onClick={deleteActivo}>
+          </button>
+          <button
+            className="bg-red-500 text-white px-3 py-1.5 rounded-lg cursor-pointer flex items-center gap-x-2 shadow-2xl"
+          onClick={deleteActivo}>
             <Trash2 className="mr-1 h-4 w-4" />
             Eliminar
-          </Button>
+          </button>
         </div>
       </div>
 
       {/* Activo Profile Card */}
-      <Card className="overflow-hidden">
+      <Card className="overflow-hidden bg-white shadow-lg">
       
         <CardContent className="relative pt-0 pb-6">
           {/* Imagen */}
@@ -351,16 +351,6 @@ export default function ActivoDetailPage() {
               </div>
             )}
 
-            <div className="flex items-start gap-3">
-              <div className="mt-1">
-                <Boxes className="h-5 w-5 text-muted-foreground" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Stock</p>
-                <p className="font-medium">{activo.stock} unidad(es)</p>
-              </div>
-            </div>
-
             {activo.ubicacion && (
               <div className="flex items-start gap-3">
                 <div className="mt-1">
@@ -396,6 +386,32 @@ export default function ActivoDetailPage() {
                 </div>
               </div>
             )}
+
+            {activo.precio_dia && (
+              <div className="flex items-start gap-3">
+                <div className="mt-1">
+                  <DollarSign className="h-5 w-5 text-muted-foreground" />
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Precio por Día</p>
+                  <p className="font-medium">${activo.precio_dia.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</p>
+                </div>
+              </div>
+
+            )}  
+
+            {activo.precio_mes && (
+              <div className="flex items-start gap-3">
+               
+                <div className="mt-1">
+                  <DollarSign className="h-5 w-5 text-muted-foreground" />
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Precio por Mes</p>
+                  <p className="font-medium">${activo.precio_mes.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</p>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Description */}
@@ -418,7 +434,7 @@ export default function ActivoDetailPage() {
 
       {/* Tabs */}
       <Tabs defaultValue="certificacion">
-        <TabsList>
+        <TabsList className="bg-white">
           <TabsTrigger value="certificacion">
             <FileCheck className="h-4 w-4 mr-1" />
             Certificación
@@ -433,7 +449,7 @@ export default function ActivoDetailPage() {
         </TabsList>
 
         {/* Certificacion Tab */}
-        <TabsContent value="certificacion" className="mt-4">
+        <TabsContent value="certificacion" className="mt-4 bg-white">
           <Card>
             <CardContent className="p-6">
               <div className="flex items-center justify-between mb-6">

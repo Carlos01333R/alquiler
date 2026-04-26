@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
+import { Eye, ArrowLeft } from 'lucide-react'
 
 interface Documento {
   id: string
@@ -16,6 +17,8 @@ interface Documento {
   total?: number
   documento_relacionado_id?: string | null
   cotizaciones_origen?: { id: string; numero_documento: string }[]
+  fecha_inicio?: string | null  
+  fecha_fin?: string | null      
 }
 
 interface Cotizacion {
@@ -25,6 +28,13 @@ interface Cotizacion {
   estado: string
   empresa: { razon_social: string; nit: string }
   total?: number
+}
+
+interface Empresa {
+  id: string
+  nit: string
+  razon_social: string
+  estado: string
 }
 
 const ESTADO_COLORS: Record<string, string> = {
@@ -40,18 +50,16 @@ const ESTADO_COLORS: Record<string, string> = {
 }
 
 const ESTADOS_LABEL: Record<string, string> = {
-  borrador: 'Borrador',
-  enviado: 'Enviado',
-  aprobado: 'Aprobado',
-  rechazado: 'Rechazado',
-  completado: 'Completado',
   pendiente: 'Pendiente',
   en_ejecucion: 'En ejecución',
   realizada: 'Realizada',
   finalizada: 'Finalizada',
 }
 
-const ESTADOS_MANUALES = ['pendiente', 'en_ejecucion', 'realizada', 'finalizada']
+const ESTADOS_MANUALES = ['pendiente', 'en_ejecucion', 'realizada', 'finalizada', 'cancelada']
+
+// Pasos del modal
+type ModalStep = 'cliente' | 'cotizaciones'
 
 export default function OrdenesPage() {
   const router = useRouter()
@@ -64,52 +72,84 @@ export default function OrdenesPage() {
   const [filtroEstado, setFiltroEstado] = useState('')
   const [sincronizando, setSincronizando] = useState(false)
 
-  // Modal cotizaciones
+  // Modal
   const [modalAbierto, setModalAbierto] = useState(false)
+  const [modalStep, setModalStep] = useState<ModalStep>('cliente')
+
+  // Paso 1 — Clientes
+  const [empresas, setEmpresas] = useState<Empresa[]>([])
+  const [loadingEmpresas, setLoadingEmpresas] = useState(false)
+  const [busquedaEmpresa, setBusquedaEmpresa] = useState('')
+  const [empresaSeleccionada, setEmpresaSeleccionada] = useState<Empresa | null>(null)
+
+  // Paso 2 — Cotizaciones
   const [cotizaciones, setCotizaciones] = useState<Cotizacion[]>([])
-  const [loadingModal, setLoadingModal] = useState(false)
+  const [loadingCotizaciones, setLoadingCotizaciones] = useState(false)
   const [busquedaModal, setBusquedaModal] = useState('')
-  // Multi-selección de cotizaciones
   const [cotSeleccionadas, setCotSeleccionadas] = useState<Set<string>>(new Set())
 
   const cargarOrdenes = useCallback(async () => {
-    try {
-      const { data, error } = await supabase
-        .from('documentos_comerciales')
-        .select('*, empresa:empresas(razon_social, nit)')
-        .eq('tipo_documento', 'orden_compra')
-        .order('created_at', { ascending: false })
-      if (error) throw error
+  try {
+    const { data, error } = await supabase
+      .from('documentos_comerciales')
+      .select('*, empresa:empresas(razon_social, nit), detalles_documentos_comerciales!inner(id)')
+      .eq('tipo_documento', 'orden_compra')
+      .order('created_at', { ascending: false })
+    if (error) throw error
 
-      const conTotales = await Promise.all((data || []).map(async (doc) => {
-        const [totRes, detRes] = await Promise.all([
-          supabase.from('totales_documentos_comerciales').select('total').eq('documento_comercial_id', doc.id).maybeSingle(),
-          supabase.from('detalles_documentos_comerciales').select('cotizaciones_origen').eq('documento_comercial_id', doc.id).maybeSingle(),
-        ])
-        return {
-          ...doc,
-          empresa: doc.empresa as any,
-          total: totRes.data?.total,
-          cotizaciones_origen: (detRes.data?.cotizaciones_origen as { id: string; numero_documento: string }[]) || []
-        }
-      }))
-      setOrdenes(conTotales)
-    } catch (e) {
-      toast.error('Error al cargar órdenes de compra')
-    } finally {
-      setLoading(false)
-    }
-  }, [])
+    const conTotales = await Promise.all((data || []).map(async (doc) => {
+      const [totRes, detRes] = await Promise.all([
+        supabase.from('totales_documentos_comerciales').select('total').eq('documento_comercial_id', doc.id).maybeSingle(),
+        supabase.from('detalles_documentos_comerciales')
+          .select('cotizaciones_origen, fecha_inicio, fecha_fin')  // ✅ agregar fechas
+          .eq('documento_comercial_id', doc.id).maybeSingle(),
+      ])
+      return {
+        ...doc,
+        empresa: doc.empresa as any,
+        total: totRes.data?.total,
+        cotizaciones_origen: (detRes.data?.cotizaciones_origen as { id: string; numero_documento: string }[]) || [],
+        fecha_inicio: detRes.data?.fecha_inicio || null,  // ✅
+        fecha_fin: detRes.data?.fecha_fin || null,        // ✅
+      }
+    }))
+    setOrdenes(conTotales)
+  } catch (e) {
+    toast.error('Error al cargar órdenes de compra')
+  } finally {
+    setLoading(false)
+  }
+}, [])
 
   useEffect(() => { cargarOrdenes() }, [cargarOrdenes])
 
-  const cargarCotizaciones = async () => {
-    setLoadingModal(true)
+  // ─── Cargar empresas al abrir modal ───────────────────────────────────────
+  const cargarEmpresas = async () => {
+    setLoadingEmpresas(true)
+    try {
+      const { data, error } = await supabase
+        .from('empresas')
+        .select('id, nit, razon_social, estado')
+        .eq('estado', 'activo')
+        .order('razon_social')
+      if (error) throw error
+      setEmpresas((data as Empresa[]) || [])
+    } catch (e) {
+      toast.error('Error al cargar clientes')
+    } finally {
+      setLoadingEmpresas(false)
+    }
+  }
+
+  // ─── Cargar cotizaciones de la empresa seleccionada ───────────────────────
+  const cargarCotizacionesDeEmpresa = async (empresaId: string) => {
+    setLoadingCotizaciones(true)
     try {
       const { data, error } = await supabase
         .from('documentos_comerciales')
-        .select('*, empresa:empresas(razon_social, nit)')
+        .select('*, empresa:empresas(razon_social, nit), detalles_documentos_comerciales!inner(id)')
         .eq('tipo_documento', 'cotizacion')
+        .eq('empresa_id', empresaId)
         .not('estado', 'eq', 'rechazado')
         .order('created_at', { ascending: false })
       if (error) throw error
@@ -124,14 +164,45 @@ export default function OrdenesPage() {
     } catch (e) {
       toast.error('Error al cargar cotizaciones')
     } finally {
-      setLoadingModal(false)
+      setLoadingCotizaciones(false)
     }
   }
 
   const abrirModal = () => {
     setModalAbierto(true)
+    setModalStep('cliente')
+    setEmpresaSeleccionada(null)
+    setBusquedaEmpresa('')
+    setBusquedaModal('')
     setCotSeleccionadas(new Set())
-    cargarCotizaciones()
+    setCotizaciones([])
+    cargarEmpresas()
+  }
+
+  const cerrarModal = () => {
+    setModalAbierto(false)
+    setModalStep('cliente')
+    setEmpresaSeleccionada(null)
+    setBusquedaEmpresa('')
+    setBusquedaModal('')
+    setCotSeleccionadas(new Set())
+    setCotizaciones([])
+  }
+
+  const seleccionarEmpresa = (empresa: Empresa) => {
+    setEmpresaSeleccionada(empresa)
+    setBusquedaModal('')
+    setCotSeleccionadas(new Set())
+    setModalStep('cotizaciones')
+    cargarCotizacionesDeEmpresa(empresa.id)
+  }
+
+  const volverAClientes = () => {
+    setModalStep('cliente')
+    setEmpresaSeleccionada(null)
+    setBusquedaModal('')
+    setCotSeleccionadas(new Set())
+    setCotizaciones([])
   }
 
   const toggleCotizacion = (id: string) => {
@@ -145,8 +216,7 @@ export default function OrdenesPage() {
   const confirmarCotizaciones = () => {
     if (cotSeleccionadas.size === 0) { toast.error('Selecciona al menos una cotización'); return }
     const ids = Array.from(cotSeleccionadas)
-    setModalAbierto(false)
-    setCotSeleccionadas(new Set())
+    cerrarModal()
     router.push(`/dashboard/ordenes/nuevo?doc_relacionado_id=${ids[0]}&cotizaciones_extra=${ids.slice(1).join(',')}`)
   }
 
@@ -216,9 +286,14 @@ export default function OrdenesPage() {
     )
   })
 
+  const empresasFiltradas = empresas.filter(e => {
+    const q = busquedaEmpresa.toLowerCase()
+    return !busquedaEmpresa || e.razon_social.toLowerCase().includes(q) || e.nit.toLowerCase().includes(q)
+  })
+
   const cotizacionesFiltradas = cotizaciones.filter(c => {
     const q = busquedaModal.toLowerCase()
-    return !busquedaModal || c.numero_documento.toLowerCase().includes(q) || c.empresa.razon_social.toLowerCase().includes(q)
+    return !busquedaModal || c.numero_documento.toLowerCase().includes(q)
   })
 
   const algunoSeleccionado = seleccionados.size > 0
@@ -250,22 +325,22 @@ export default function OrdenesPage() {
 
               <button
                 onClick={abrirModal}
-                className="px-4 py-2 border border-indigo-600 text-indigo-600 rounded-md hover:bg-indigo-50 flex items-center gap-2 text-sm font-medium transition-colors"
+                className="px-4 py-2 border border-gray-300 text-indigo-600 rounded-md hover:bg-indigo-50 flex items-center gap-2 text-sm font-medium transition-colors"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                 </svg>
-                Agregar desde cotización
+                <p className='text-black'>Agregar desde cotización</p>
               </button>
 
               <button
                 onClick={() => router.push('/dashboard/ordenes/nuevo')}
                 className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center gap-2 text-sm font-medium transition-colors"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4" fill="none" stroke="#fff" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                 </svg>
-                Nueva OC
+                <p className='text-white'>Nueva OC</p>
               </button>
             </div>
           </div>
@@ -325,13 +400,13 @@ export default function OrdenesPage() {
               <button onClick={abrirModal} className="text-sm text-indigo-600 underline">Crear desde una cotización</button>
             </div>
           ) : (
-            <table className="w-full">
+            <table className="w-full ">
               <thead className="bg-gray-50 border-b">
                 <tr>
                   <th className="px-4 py-3 w-10">
                     <input type="checkbox" checked={todosSeleccionados} onChange={toggleTodos} className="w-4 h-4 accent-blue-600 cursor-pointer" />
                   </th>
-                  {['Número', 'Empresa', 'Fecha', 'Estado', 'Cotizaciones', 'Total', ''].map(h => (
+                  {['Número', 'Empresa', 'Fecha', 'Estado', 'fecha inicio', 'fecha fin', 'Cotizaciones', 'Total', ''].map(h => (
                     <th key={h} className={`px-6 py-3 text-xs font-semibold text-gray-500 uppercase ${h === 'Total' || h === '' ? 'text-right' : 'text-left'}`}>{h}</th>
                   ))}
                 </tr>
@@ -372,6 +447,20 @@ export default function OrdenesPage() {
                           )}
                         </select>
                       </td>
+                    
+                          <td className="px-6 py-4 text-sm text-gray-600 whitespace-nowrap">
+                        {doc.fecha_inicio
+                          ? new Date(doc.fecha_inicio + 'T00:00:00').toLocaleDateString('es-CO')
+                          : <span className="text-gray-300">—</span>
+                        }
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-600 whitespace-nowrap">
+                        {doc.fecha_fin
+                          ? new Date(doc.fecha_fin + 'T00:00:00').toLocaleDateString('es-CO')
+                          : <span className="text-gray-300">—</span>
+                        }
+                      </td>  
+
                       <td className="px-6 py-4">
                         {doc.cotizaciones_origen && doc.cotizaciones_origen.length > 0 ? (
                           <div className="flex flex-wrap gap-1">
@@ -398,13 +487,15 @@ export default function OrdenesPage() {
                       </td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-3">
-                          <button onClick={() => router.push(`/dashboard/ordenes/${doc.id}/totales`)} className="text-blue-600 hover:text-blue-800 text-sm font-medium">Ver</button>
+                          <button onClick={() => router.push(`/dashboard/ordenes/${doc.id}/totales`)} className="text-blue-600 hover:text-blue-800 text-sm font-medium cursor-pointer">
+                            <Eye className="w-5 h-5 text-blue-600" />
+                          </button>
                           <button
                             onClick={() => router.push(`/dashboard/ordenes/${doc.id}/detalles?empresa_id=${doc.empresa_id}&modo=editar`)}
-                            className="text-gray-400 hover:text-blue-600 transition-colors"
+                            className="text-gray-400 hover:text-blue-600 transition-colors cursor-pointer"
                             title="Editar"
                           >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                             </svg>
                           </button>
@@ -426,90 +517,190 @@ export default function OrdenesPage() {
         )}
       </div>
 
-      {/* Modal cotizaciones — multi-selección */}
+      {/* ── Modal dos pasos ── */}
       {modalAbierto && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col">
-            <div className="p-5 border-b flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-bold">Seleccionar Cotización</h2>
-                <p className="text-sm text-gray-500">Selecciona una o más cotizaciones para combinar en la OC</p>
-              </div>
-              <button onClick={() => { setModalAbierto(false); setCotSeleccionadas(new Set()) }} className="text-gray-400 hover:text-gray-600 transition-colors">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
 
-            <div className="p-4 border-b">
-              <input
-                type="text" placeholder="Buscar cotización..." value={busquedaModal}
-                onChange={e => setBusquedaModal(e.target.value)}
-                className="w-full px-3 py-2 border rounded-md text-sm"
-                autoFocus
-              />
-            </div>
+            {/* ── PASO 1: Seleccionar cliente ── */}
+            {modalStep === 'cliente' && (
+              <>
+                {/* Header */}
+                <div className="p-5 border-b flex items-center justify-between">
+                  <div>
+                    <h2 className="text-lg font-bold">Seleccionar Cliente</h2>
+                    <p className="text-sm text-gray-500">Paso 1 de 2 — Elige el cliente para ver sus cotizaciones</p>
+                  </div>
+                  <button onClick={cerrarModal} className="text-gray-400 hover:text-gray-600 transition-colors">
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
 
-            <div className="overflow-y-auto flex-1">
-              {loadingModal ? (
-                <div className="p-8 text-center text-gray-400 text-sm">Cargando cotizaciones...</div>
-              ) : cotizacionesFiltradas.length === 0 ? (
-                <div className="p-8 text-center text-gray-400 text-sm">No hay cotizaciones disponibles</div>
-              ) : (
-                cotizacionesFiltradas.map(cot => {
-                  const seleccionada = cotSeleccionadas.has(cot.id)
-                  return (
-                    <div
-                      key={cot.id}
-                      onClick={() => toggleCotizacion(cot.id)}
-                      className={`px-5 py-4 border-b cursor-pointer transition-colors flex items-center gap-4 ${seleccionada ? 'bg-indigo-50 border-l-4 border-l-indigo-500' : 'hover:bg-gray-50'}`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={seleccionada}
-                        onChange={() => toggleCotizacion(cot.id)}
-                        onClick={e => e.stopPropagation()}
-                        className="w-4 h-4 accent-indigo-600 shrink-0"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-0.5">
-                          <span className="font-mono font-semibold text-sm">{cot.numero_documento}</span>
-                          <span className={`text-xs px-1.5 py-0.5 rounded capitalize ${ESTADO_COLORS[cot.estado] || ''}`}>{cot.estado}</span>
-                        </div>
-                        <p className="text-sm text-gray-600 truncate">{cot.empresa.razon_social}</p>
-                        <p className="text-xs text-gray-400">{new Date(cot.fecha_emision + 'T00:00:00').toLocaleDateString('es-CO')}</p>
-                      </div>
-                      {cot.total != null && (
-                        <span className="text-sm font-semibold text-gray-700 shrink-0">
-                          ${Number(cot.total).toLocaleString('es-CO', { minimumFractionDigits: 2 })}
-                        </span>
-                      )}
+                {/* Buscador */}
+                <div className="p-4 border-b">
+                  <input
+                    type="text"
+                    placeholder="Buscar por nombre o NIT..."
+                    value={busquedaEmpresa}
+                    onChange={e => setBusquedaEmpresa(e.target.value)}
+                    className="w-full px-3 py-2 border rounded-md text-sm"
+                    autoFocus
+                  />
+                </div>
+
+                {/* Lista de empresas */}
+                <div className="overflow-y-auto flex-1">
+                  {loadingEmpresas ? (
+                    <div className="p-8 text-center text-gray-400 text-sm">Cargando clientes...</div>
+                  ) : empresasFiltradas.length === 0 ? (
+                    <div className="p-8 text-center text-gray-400 text-sm">
+                      {busquedaEmpresa ? 'No se encontraron clientes con esa búsqueda' : 'No hay clientes disponibles'}
                     </div>
-                  )
-                })
-              )}
-            </div>
+                  ) : (
+                    empresasFiltradas.map(empresa => (
+                      <button
+                        key={empresa.id}
+                        type="button"
+                        onClick={() => seleccionarEmpresa(empresa)}
+                        className="w-full px-5 py-4 border-b text-left hover:bg-indigo-50 transition-colors flex items-center justify-between group"
+                      >
+                        <div>
+                          <p className="font-medium text-sm text-gray-800 group-hover:text-indigo-700">
+                            {empresa.razon_social}
+                          </p>
+                          <p className="text-xs text-gray-400 mt-0.5">NIT: {empresa.nit}</p>
+                        </div>
+                        <svg className="w-4 h-4 text-gray-300 group-hover:text-indigo-500 transition-colors flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                      </button>
+                    ))
+                  )}
+                </div>
 
-            <div className="p-4 border-t bg-gray-50 flex items-center justify-between">
-              <span className="text-sm text-gray-500">
-                {cotSeleccionadas.size > 0
-                  ? `${cotSeleccionadas.size} cotización${cotSeleccionadas.size > 1 ? 'es' : ''} seleccionada${cotSeleccionadas.size > 1 ? 's' : ''}`
-                  : 'Ninguna seleccionada'}
-              </span>
-              <div className="flex gap-2">
-                <button onClick={() => { setModalAbierto(false); setCotSeleccionadas(new Set()) }} className="px-4 py-2 border rounded-md text-sm hover:bg-white transition-colors">
-                  Cancelar
-                </button>
-                <button
-                  onClick={confirmarCotizaciones}
-                  disabled={cotSeleccionadas.size === 0}
-                  className="px-4 py-2 bg-indigo-600 text-white rounded-md text-sm font-medium hover:bg-indigo-700 disabled:opacity-40 transition-colors"
-                >
-                  Agregar {cotSeleccionadas.size > 1 ? `${cotSeleccionadas.size} cotizaciones` : 'cotización'} →
-                </button>
-              </div>
-            </div>
+                {/* Footer */}
+                <div className="p-4 border-t bg-gray-50 flex justify-end">
+                  <button onClick={cerrarModal} className="bg-red-500  px-4 py-2 border rounded-md text-sm  transition-colors">
+                    <p className='text-white'>Cancelar</p>
+                  </button>
+                </div>
+              </>
+            )}
+
+            {/* ── PASO 2: Seleccionar cotizaciones ── */}
+            {modalStep === 'cotizaciones' && (
+              <>
+                {/* Header */}
+                <div className="p-5 border-b flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={volverAClientes}
+                      className="text-gray-400 hover:text-gray-600 transition-colors"
+                      title="Volver a clientes"
+                    >
+                      <ArrowLeft className="w-5 h-5" />
+                    </button>
+                    <div>
+                      <h2 className="text-lg font-bold">Seleccionar Cotización</h2>
+                      <p className="text-sm text-gray-500">
+                        Paso 2 de 2 —{' '}
+                        <span className="font-medium text-indigo-600">{empresaSeleccionada?.razon_social}</span>
+                      </p>
+                    </div>
+                  </div>
+                  <button onClick={cerrarModal} className="text-gray-400 hover:text-gray-600 transition-colors">
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+
+                {/* Buscador */}
+                <div className="p-4 border-b">
+                  <input
+                    type="text"
+                    placeholder="Buscar por número de cotización..."
+                    value={busquedaModal}
+                    onChange={e => setBusquedaModal(e.target.value)}
+                    className="w-full px-3 py-2 border rounded-md text-sm"
+                    autoFocus
+                  />
+                </div>
+
+                {/* Lista de cotizaciones */}
+                <div className="overflow-y-auto flex-1">
+                  {loadingCotizaciones ? (
+                    <div className="p-8 text-center text-gray-400 text-sm">Cargando cotizaciones...</div>
+                  ) : cotizacionesFiltradas.length === 0 ? (
+                    <div className="p-8 text-center text-gray-400 text-sm">
+                      {busquedaModal
+                        ? 'No se encontraron cotizaciones con esa búsqueda'
+                        : 'Este cliente no tiene cotizaciones disponibles'}
+                    </div>
+                  ) : (
+                    cotizacionesFiltradas.map(cot => {
+                      const seleccionada = cotSeleccionadas.has(cot.id)
+                      return (
+                        <div
+                          key={cot.id}
+                          onClick={() => toggleCotizacion(cot.id)}
+                          className={`px-5 py-4 border-b cursor-pointer transition-colors flex items-center gap-4 ${seleccionada ? 'bg-indigo-50 border-l-4 border-l-indigo-500' : 'hover:bg-gray-50'}`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={seleccionada}
+                            onChange={() => toggleCotizacion(cot.id)}
+                            onClick={e => e.stopPropagation()}
+                            className="w-4 h-4 accent-indigo-600 shrink-0"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-0.5">
+                              <span className="font-mono font-semibold text-sm">{cot.numero_documento}</span>
+                              <span className={`text-xs px-1.5 py-0.5 rounded capitalize ${ESTADO_COLORS[cot.estado] || ''}`}>
+                                {ESTADOS_LABEL[cot.estado] || cot.estado}
+                              </span>
+                            </div>
+                            <p className="text-xs text-gray-400">
+                              {new Date(cot.fecha_emision + 'T00:00:00').toLocaleDateString('es-CO')}
+                            </p>
+                          </div>
+                          {cot.total != null && (
+                            <span className="text-sm font-semibold text-gray-700 shrink-0">
+                              ${Number(cot.total).toLocaleString('es-CO', { minimumFractionDigits: 2 })}
+                            </span>
+                          )}
+                        </div>
+                      )
+                    })
+                  )}
+                </div>
+
+                {/* Footer */}
+                <div className="p-4 border-t bg-gray-50 flex items-center justify-between">
+                  <span className="text-sm text-gray-500">
+                    {cotSeleccionadas.size > 0
+                      ? `${cotSeleccionadas.size} cotización${cotSeleccionadas.size > 1 ? 'es' : ''} seleccionada${cotSeleccionadas.size > 1 ? 's' : ''}`
+                      : 'Ninguna seleccionada'}
+                  </span>
+                  <div className="flex gap-2">
+                    <button onClick={volverAClientes} className="px-4 py-2 border rounded-md text-sm hover:bg-white transition-colors">
+                      Atrás
+                    </button>
+                    <button
+                      onClick={confirmarCotizaciones}
+                      disabled={cotSeleccionadas.size === 0}
+                      className="px-4 py-2 bg-indigo-600  rounded-md text-sm font-medium hover:bg-indigo-700 disabled:opacity-40 transition-colors cursor-pointer disabled:cursor-not-allowed flex items-center gap-2"
+                    >
+                      <p className='text-white'>Agregar {cotSeleccionadas.size > 1 ? `${cotSeleccionadas.size} cotizaciones` : 'cotización'}</p>
+                     
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+
           </div>
         </div>
       )}

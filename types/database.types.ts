@@ -147,6 +147,7 @@ export interface Database {
           observaciones: string | null
           created_at: string
           updated_at: string
+          subtipo_documento: string
         }
         Insert: Omit<Database['public']['Tables']['documentos_comerciales']['Row'], 'id' | 'created_at' | 'updated_at'>
         Update: Partial<Database['public']['Tables']['documentos_comerciales']['Insert']>

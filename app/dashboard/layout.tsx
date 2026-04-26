@@ -31,7 +31,6 @@ export default function DashboardLayout({
     }
   }, []);
 
-  // Efecto para guardar en localStorage cuando activeSection cambie
   useEffect(() => {
     if (typeof window !== 'undefined') {
       localStorage.setItem('activeSection', activeSection);
@@ -51,6 +50,7 @@ export default function DashboardLayout({
       case 'montajes': return 'Gestión de Montajes';
       case 'solicitudes': return 'Gestión de Solicitudes';
       case 'configuracion': return 'Configuración';
+      case 'Documento': return 'Documentos';
       default: return 'Dashboard';
     }
   };

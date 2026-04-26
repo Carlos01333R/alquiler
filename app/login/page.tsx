@@ -17,7 +17,6 @@ export default function Login() {
   const { login, user, isLoading } = useAuth()
   const router = useRouter()
 
-  // Si ya hay sesión, redirigir al home
   useEffect(() => {
     if (!isLoading && user) {
       router.replace("/")
@@ -39,7 +38,6 @@ export default function Login() {
     }
   }
 
-  // Mientras restauramos sesión, mostrar loader básico
   if (isLoading) {
     return (
       <div className="min-h-screen bg-linear-to-br from-emerald-50 via-blue-50 to-yellow-50 flex items-center justify-center p-4">
@@ -62,10 +60,10 @@ export default function Login() {
           <p className="text-white/90 text-sm">Somos la solución a tus necesidades</p>
         </div>
 
-        {/* Formulario */}
+        
         <div className="p-8">
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Campo Usuario */}
+          
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">Correo</label>
               <div className="relative">
@@ -81,7 +79,6 @@ export default function Login() {
               </div>
             </div>
 
-            {/* Campo Contraseña */}
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">Contraseña</label>
               <div className="relative">
@@ -104,12 +101,10 @@ export default function Login() {
               </div>
             </div>
 
-            {/* Error */}
             {error && (
               <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">{error}</div>
             )}
 
-            {/* Botón Login */}
             <button
               type="submit"
               disabled={loading}
@@ -125,10 +120,7 @@ export default function Login() {
               )}
             </button>
            
-          </form>
-
-          {/* Información de prueba */}
-        
+          </form>        
         </div>
       </div>
 

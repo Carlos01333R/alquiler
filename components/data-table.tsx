@@ -24,7 +24,7 @@ interface Column<T> {
 interface DataTableProps<T> {
   data: T[]
   columns: Column<T>[]
-  searchKey?: string
+  searchKey?: string | string[]
   searchPlaceholder?: string
   onRowClick?: (item: T) => void
   pageSize?: number
@@ -43,13 +43,22 @@ export function DataTable<T extends Record<string, unknown>>({
 
   const filtered = useMemo(() => {
     if (!search || !searchKey) return data
-    return data.filter((item) => {
-      const val = item[searchKey]
-      if (typeof val === "string") {
-        return val.toLowerCase().includes(search.toLowerCase())
-      }
-      return true
-    })
+
+    const keys = Array.isArray(searchKey) ? searchKey : [searchKey]
+    const query = search.toLowerCase()
+
+    return data.filter((item) =>
+      keys.some((key) => {
+        const val = item[key]
+        if (typeof val === "string") {
+          return val.toLowerCase().includes(query)
+        }
+        if (typeof val === "number") {
+          return String(val).includes(query)
+        }
+        return false
+      })
+    )
   }, [data, search, searchKey])
 
   const totalPages = Math.ceil(filtered.length / pageSize)
@@ -71,7 +80,7 @@ export function DataTable<T extends Record<string, unknown>>({
           />
         </div>
       )}
-      <div className="rounded-md border">
+      <div className="rounded-md border overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>

@@ -135,7 +135,7 @@ export function SolicitudForm({ solicitud }: SolicitudFormProps) {
   }
 
   return (
-    <form onSubmit={handleSubmit}>
+    <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-md">
       <Card>
         <CardHeader>
           <CardTitle>{isEdit ? "Editar Solicitud" : "Nueva Solicitud"}</CardTitle>

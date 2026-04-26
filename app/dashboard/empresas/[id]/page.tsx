@@ -54,10 +54,9 @@ import {
   Wrench,
   Hammer,
   ShoppingCart,
-  Lock,
-  EyeOff,
   BookOpen,
 } from "lucide-react"
+import ConfirmModal from "@/components/ConfirModal"
 
 interface DocumentoAdjunto {
   id: string
@@ -72,8 +71,7 @@ interface Usuario {
   id: string
   nombre: string
   email: string
-  password: string
-  rol: 'admin' | 'tecnico'
+  rol: "admin" | "tecnico"
   created_at?: string
 }
 
@@ -85,7 +83,6 @@ interface DocumentoComercial {
   estado: string
   empresa_id: string
 }
-
 export default function EmpresaDetailPage() {
   const params = useParams()
   const router = useRouter()
@@ -101,7 +98,31 @@ export default function EmpresaDetailPage() {
   const [montajes, setMontajes] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [uploadingDoc, setUploadingDoc] = useState(false)
-  const [showPassword, setShowPassword] = useState<{[key: string]: boolean}>({})
+  const [busquedaUsuario, setBusquedaUsuario] = useState("")
+
+  // ── Estado para modales de confirmación ──────────────────────────────────
+  const [confirmDeleteUsuario, setConfirmDeleteUsuario] = useState<{
+    open: boolean
+    usuario: Usuario | null
+    loading: boolean
+  }>({ open: false, usuario: null, loading: false })
+
+  const [confirmDeleteContacto, setConfirmDeleteContacto] = useState<{
+    open: boolean
+    contactoId: string | null
+    loading: boolean
+  }>({ open: false, contactoId: null, loading: false })
+
+  const [confirmDeleteEmpresa, setConfirmDeleteEmpresa] = useState<{
+    open: boolean
+    loading: boolean
+  }>({ open: false, loading: false })
+
+  const [confirmDeleteDoc, setConfirmDeleteDoc] = useState<{
+    open: boolean
+    doc: DocumentoAdjunto | null
+    loading: boolean
+  }>({ open: false, doc: null, loading: false })
 
   // Contact form
   const [contactOpen, setContactOpen] = useState(false)
@@ -114,60 +135,53 @@ export default function EmpresaDetailPage() {
 
   // Usuario form
   const [usuarioOpen, setUsuarioOpen] = useState(false)
+  const [savingUsuario, setSavingUsuario] = useState(false)
   const [usuarioForm, setUsuarioForm] = useState({
     nombre: "",
     email: "",
     password: "",
-    rol: "tecnico" as 'admin' | 'tecnico',
+    rol: "tecnico" as "admin" | "tecnico",
   })
 
   // Document upload
   const [uploadOpen, setUploadOpen] = useState(false)
 
+  // ── Carga de datos ────────────────────────────────────────────────────────
   const loadData = useCallback(async () => {
     try {
-      // Cargar empresa
       const { data: emp } = await supabase
         .from("empresas")
         .select("*")
         .eq("id", id)
         .single()
-      
+
       setEmpresa(emp as Empresa)
 
-      // Cargar contactos
       const { data: conts } = await supabase
         .from("contactos")
         .select("*")
         .eq("empresa_id", id)
         .order("created_at", { ascending: false })
-      
+
       setContactos((conts as Contacto[]) || [])
-      
-      // Parse documentos adjuntos
+
       if (emp?.documentos_adjuntos) {
-        const docs = Array.isArray(emp.documentos_adjuntos) ? emp.documentos_adjuntos : []
+        const docs = Array.isArray(emp.documentos_adjuntos)
+          ? emp.documentos_adjuntos
+          : []
         setDocumentos(docs)
       }
 
-      // Cargar usuarios de la empresa
-    
-    const { data: usuariosData, error } = await supabase
-      .from("usuarios")
-      .select("*")
-      .eq("empresa_id", id)
-     
+      const { data: usuariosData, error } = await supabase
+        .from("usuarios")
+        .select("*")
+        .eq("empresa_id", id)
 
-    if (error) {
-      console.error("Error cargando usuarios:", error);
-      return;
-    }
-    if (usuariosData && usuariosData.length > 0) {
-      setUsuarios(usuariosData);
-    } else {
-      setUsuarios([]); 
-    }
-      // Cargar documentos comerciales
+      if (error) {
+        console.error("Error cargando usuarios:", error)
+      }
+      setUsuarios(usuariosData ?? [])
+
       const { data: docsComerciales } = await supabase
         .from("documentos_comerciales")
         .select("*")
@@ -177,10 +191,9 @@ export default function EmpresaDetailPage() {
 
       setDocumentosComerciales((docsComerciales as DocumentoComercial[]) || [])
 
-      // Cargar activos, mantenimientos y montajes de los detalles
       if (docsComerciales && docsComerciales.length > 0) {
         const documentoIds = docsComerciales.map((doc: any) => doc.id)
-        
+
         const { data: detalles } = await supabase
           .from("detalles_documentos_comerciales")
           .select("*")
@@ -192,34 +205,41 @@ export default function EmpresaDetailPage() {
           let allMontajes: any[] = []
 
           detalles.forEach((detalle: any) => {
-            // Activos
-            if (detalle.activos_seleccionados && Array.isArray(detalle.activos_seleccionados)) {
-              const activosConDoc = detalle.activos_seleccionados.map((activo: any) => ({
-                ...activo,
-                documento_id: detalle.documento_comercial_id,
-                documento_numero: docsComerciales.find((d: any) => d.id === detalle.documento_comercial_id)?.numero_documento
-              }))
-              allActivos = [...allActivos, ...activosConDoc]
-            }
+            const findDoc = (docId: string) =>
+              docsComerciales.find((d: any) => d.id === docId)
 
-            // Mantenimientos
-            if (detalle.mantenimientos && Array.isArray(detalle.mantenimientos)) {
-              const mantsConDoc = detalle.mantenimientos.map((mant: any) => ({
-                ...mant,
-                documento_id: detalle.documento_comercial_id,
-                documento_numero: docsComerciales.find((d: any) => d.id === detalle.documento_comercial_id)?.numero_documento
-              }))
-              allMantenimientos = [...allMantenimientos, ...mantsConDoc]
+            if (Array.isArray(detalle.activos_seleccionados)) {
+              allActivos = [
+                ...allActivos,
+                ...detalle.activos_seleccionados.map((a: any) => ({
+                  ...a,
+                  documento_id: detalle.documento_comercial_id,
+                  documento_numero: findDoc(detalle.documento_comercial_id)
+                    ?.numero_documento,
+                })),
+              ]
             }
-
-            // Montajes
-            if (detalle.montajes && Array.isArray(detalle.montajes)) {
-              const montConDoc = detalle.montajes.map((mont: any) => ({
-                ...mont,
-                documento_id: detalle.documento_comercial_id,
-                documento_numero: docsComerciales.find((d: any) => d.id === detalle.documento_comercial_id)?.numero_documento
-              }))
-              allMontajes = [...allMontajes, ...montConDoc]
+            if (Array.isArray(detalle.mantenimientos)) {
+              allMantenimientos = [
+                ...allMantenimientos,
+                ...detalle.mantenimientos.map((m: any) => ({
+                  ...m,
+                  documento_id: detalle.documento_comercial_id,
+                  documento_numero: findDoc(detalle.documento_comercial_id)
+                    ?.numero_documento,
+                })),
+              ]
+            }
+            if (Array.isArray(detalle.montajes)) {
+              allMontajes = [
+                ...allMontajes,
+                ...detalle.montajes.map((m: any) => ({
+                  ...m,
+                  documento_id: detalle.documento_comercial_id,
+                  documento_numero: findDoc(detalle.documento_comercial_id)
+                    ?.numero_documento,
+                })),
+              ]
             }
           })
 
@@ -231,8 +251,8 @@ export default function EmpresaDetailPage() {
 
       setLoading(false)
     } catch (error: any) {
-      console.error('Error cargando datos:', error)
-      toast.error('Error al cargar los datos')
+      console.error("Error cargando datos:", error)
+      toast.error("Error al cargar los datos")
       setLoading(false)
     }
   }, [id])
@@ -241,7 +261,12 @@ export default function EmpresaDetailPage() {
     loadData()
   }, [loadData])
 
-  // ==================== CONTACTOS ====================
+  const filtradas = usuarios.filter(u => {
+    const q = busquedaUsuario.toLowerCase()
+    return !busquedaUsuario || u.nombre.toLowerCase().includes(q) || u.email.toLowerCase().includes(q)
+  })
+
+  // ── CONTACTOS ─────────────────────────────────────────────────────────────
   const addContact = async () => {
     if (!contactForm.nombre) {
       toast.error("El nombre es obligatorio")
@@ -262,8 +287,14 @@ export default function EmpresaDetailPage() {
     loadData()
   }
 
-  const deleteContact = async (contactId: string) => {
-    const { error } = await supabase.from("contactos").delete().eq("id", contactId)
+  const deleteContact = async () => {
+    if (!confirmDeleteContacto.contactoId) return
+    setConfirmDeleteContacto((p) => ({ ...p, loading: true }))
+    const { error } = await supabase
+      .from("contactos")
+      .delete()
+      .eq("id", confirmDeleteContacto.contactoId)
+    setConfirmDeleteContacto({ open: false, contactoId: null, loading: false })
     if (error) {
       toast.error(error.message)
       return
@@ -272,72 +303,76 @@ export default function EmpresaDetailPage() {
     loadData()
   }
 
-  // ==================== USUARIOS ====================
+  // ── USUARIOS ──────────────────────────────────────────────────────────────
+  /**
+   * Crea el usuario llamando a nuestra API Route (usa service_role key en el servidor),
+   * por lo que NO cierra la sesión del admin actual.
+   */
   const addUsuario = async () => {
-  if (!usuarioForm.email || !usuarioForm.password) {
-    toast.error("Email y contraseña son obligatorios");
-    return;
-  }
-
-  try {
-    // 1️⃣ Crear usuario en Auth (requiere service role key en backend)
-    const { data: authData, error: authError } =
-      await supabase.auth.signUp({
-        email: usuarioForm.email,
-        password: usuarioForm.password,
-      });
-
-    if (authError) throw authError;
-
-    if (!authData.user) {
-      throw new Error("No se pudo crear el usuario");
+    if (!usuarioForm.email || !usuarioForm.password || !usuarioForm.nombre) {
+      toast.error("Nombre, email y contraseña son obligatorios")
+      return
     }
 
-    // 2️⃣ Crear perfil en tabla usuarios
-    const { error: profileError } = await supabase
-      .from("usuarios")
-      .insert({
-        id: authData.user.id,
-        empresa_id: id, // id de la empresa
-        nombre: usuarioForm.nombre,
-        email: usuarioForm.email,
-        rol: usuarioForm.rol,
-      });
+    setSavingUsuario(true)
+    try {
+      const res = await fetch("/api/usuarios/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: usuarioForm.email,
+          password: usuarioForm.password,
+          nombre: usuarioForm.nombre,
+          rol: usuarioForm.rol,
+          empresa_id: id,
+        }),
+      })
 
-    if (profileError) throw profileError;
+      const data = await res.json()
 
-    toast.success("Usuario agregado exitosamente");
+      if (!res.ok) {
+        throw new Error(data.error || "Error al crear usuario")
+      }
 
-    setUsuarioForm({ nombre: "", email: "", password: "", rol: "tecnico" });
-    setUsuarioOpen(false);
-
-    loadData();
-  } catch (error: any) {
-    toast.error(error.message || "Error al agregar usuario");
+      toast.success("Usuario creado exitosamente")
+      setUsuarioForm({ nombre: "", email: "", password: "", rol: "tecnico" })
+      setUsuarioOpen(false)
+      loadData()
+    } catch (error: any) {
+      toast.error(error.message || "Error al crear usuario")
+    } finally {
+      setSavingUsuario(false)
+    }
   }
-};
 
-  const deleteUsuario = async (usuarioId: string) => {
-    if (!confirm("¿Eliminar este usuario?")) return
+  /**
+   * Elimina el usuario de Auth Y de la tabla usuarios usando nuestra API Route.
+   */
+  const deleteUsuario = async () => {
+    if (!confirmDeleteUsuario.usuario) return
+    setConfirmDeleteUsuario((p) => ({ ...p, loading: true }))
 
     try {
-      const usuariosActualizados = usuarios.filter(u => u.id !== usuarioId)
+      const res = await fetch(
+        `/api/usuarios/delete?userId=${confirmDeleteUsuario.usuario.id}`,
+        { method: "DELETE" }
+      )
+      const data = await res.json()
 
-      const { error } = await supabase
-        .from("usuarios_empresa")
-        .update({ usuarios: usuariosActualizados })
-        .eq("empresa_id", id)
+      if (!res.ok) {
+        throw new Error(data.error || "Error al eliminar usuario")
+      }
 
-      if (error) throw error
-
-      toast.success("Usuario eliminado")
+      toast.success("Usuario eliminado correctamente")
       loadData()
     } catch (error: any) {
       toast.error(error.message || "Error al eliminar usuario")
+    } finally {
+      setConfirmDeleteUsuario({ open: false, usuario: null, loading: false })
     }
   }
 
-  // ==================== DOCUMENTOS ====================
+  // ── DOCUMENTOS ────────────────────────────────────────────────────────────
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -349,18 +384,17 @@ export default function EmpresaDetailPage() {
 
     setUploadingDoc(true)
     try {
-      const fileExt = file.name.split('.').pop()
       const fileName = `documentos/${id}/${Date.now()}-${file.name}`
 
       const { error: uploadError } = await supabase.storage
-        .from('empresas')
+        .from("empresas")
         .upload(fileName, file, { cacheControl: "3600", upsert: true })
 
       if (uploadError) throw uploadError
 
-      const { data: { publicUrl } } = supabase.storage
-        .from('empresas')
-        .getPublicUrl(fileName)
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from("empresas").getPublicUrl(fileName)
 
       const newDoc: DocumentoAdjunto = {
         id: crypto.randomUUID(),
@@ -372,15 +406,18 @@ export default function EmpresaDetailPage() {
       }
 
       const updatedDocs = [...documentos, newDoc]
-      const updatedPaths = [...(empresa?.documentos_paths || []), fileName]
+      const updatedPaths = [
+        ...(empresa?.documentos_paths || []),
+        fileName,
+      ]
 
       const { error: updateError } = await supabase
-        .from('empresas')
-        .update({ 
+        .from("empresas")
+        .update({
           documentos_adjuntos: updatedDocs,
-          documentos_paths: updatedPaths 
+          documentos_paths: updatedPaths,
         })
-        .eq('id', id)
+        .eq("id", id)
 
       if (updateError) throw updateError
 
@@ -399,7 +436,7 @@ export default function EmpresaDetailPage() {
       const response = await fetch(doc.url)
       const blob = await response.blob()
       const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
+      const a = document.createElement("a")
       a.href = url
       a.download = doc.nombre
       document.body.appendChild(a)
@@ -412,30 +449,30 @@ export default function EmpresaDetailPage() {
     }
   }
 
-  const viewDocument = async (doc: DocumentoAdjunto) => {
-    window.open(doc.url, '_blank')
-  }
-
-  const deleteDocument = async (doc: DocumentoAdjunto) => {
-    if (!confirm(`¿Eliminar el documento "${doc.nombre}"?`)) return
+  const deleteDocument = async () => {
+    if (!confirmDeleteDoc.doc) return
+    const doc = confirmDeleteDoc.doc
+    setConfirmDeleteDoc((p) => ({ ...p, loading: true }))
 
     try {
       const { error: storageError } = await supabase.storage
-        .from('empresas')
+        .from("empresas")
         .remove([doc.path])
 
       if (storageError) throw storageError
 
-      const updatedDocs = documentos.filter(d => d.id !== doc.id)
-      const updatedPaths = (empresa?.documentos_paths || []).filter((p: string) => p !== doc.path)
+      const updatedDocs = documentos.filter((d) => d.id !== doc.id)
+      const updatedPaths = (empresa?.documentos_paths || []).filter(
+        (p: string) => p !== doc.path
+      )
 
       const { error: updateError } = await supabase
-        .from('empresas')
-        .update({ 
+        .from("empresas")
+        .update({
           documentos_adjuntos: updatedDocs,
-          documentos_paths: updatedPaths 
+          documentos_paths: updatedPaths,
         })
-        .eq('id', id)
+        .eq("id", id)
 
       if (updateError) throw updateError
 
@@ -443,43 +480,39 @@ export default function EmpresaDetailPage() {
       loadData()
     } catch (error: any) {
       toast.error(error.message || "Error al eliminar el documento")
+    } finally {
+      setConfirmDeleteDoc({ open: false, doc: null, loading: false })
     }
   }
 
-  // ==================== EMPRESA ====================
+  // ── EMPRESA ───────────────────────────────────────────────────────────────
   const deleteEmpresa = async () => {
-    if (!confirm("¿Estás seguro de eliminar esta empresa? Se eliminarán todos los datos asociados.")) return
+    setConfirmDeleteEmpresa((p) => ({ ...p, loading: true }))
     const { error } = await supabase.from("empresas").delete().eq("id", id)
     if (error) {
       toast.error(error.message)
+      setConfirmDeleteEmpresa({ open: false, loading: false })
       return
     }
     toast.success("Empresa eliminada")
     router.push("/dashboard/empresas")
   }
 
-  // ==================== UTILIDADES ====================
+  // ── UTILIDADES ────────────────────────────────────────────────────────────
   const formatFileSize = (bytes?: number) => {
-    if (!bytes) return 'N/A'
-    if (bytes < 1024) return bytes + ' B'
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
-    return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
+    if (!bytes) return "N/A"
+    if (bytes < 1024) return bytes + " B"
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB"
+    return (bytes / (1024 * 1024)).toFixed(1) + " MB"
   }
 
   const formatDate = (dateString?: string) => {
-    if (!dateString) return 'N/A'
-    return new Date(dateString).toLocaleDateString('es-ES', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
+    if (!dateString) return "N/A"
+    return new Date(dateString).toLocaleDateString("es-ES", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
     })
-  }
-
-  const togglePasswordVisibility = (usuarioId: string) => {
-    setShowPassword(prev => ({
-      ...prev,
-      [usuarioId]: !prev[usuarioId]
-    }))
   }
 
   if (loading) {
@@ -497,12 +530,58 @@ export default function EmpresaDetailPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* ── Modales de confirmación ── */}
+      <ConfirmModal
+        open={confirmDeleteUsuario.open}
+        onOpenChange={(v) =>
+          setConfirmDeleteUsuario((p) => ({ ...p, open: v }))
+        }
+        title="Eliminar usuario"
+        description={`¿Estás seguro de eliminar a "${confirmDeleteUsuario.usuario?.nombre}"? Esta acción eliminará su acceso al sistema y no se puede deshacer.`}
+        onConfirm={deleteUsuario}
+        loading={confirmDeleteUsuario.loading}
+      />
+
+      <ConfirmModal
+        open={confirmDeleteContacto.open}
+        onOpenChange={(v) =>
+          setConfirmDeleteContacto((p) => ({ ...p, open: v }))
+        }
+        title="Eliminar contacto"
+        description="¿Estás seguro de eliminar este contacto? Esta acción no se puede deshacer."
+        onConfirm={deleteContact}
+        loading={confirmDeleteContacto.loading}
+      />
+
+      <ConfirmModal
+        open={confirmDeleteEmpresa.open}
+        onOpenChange={(v) =>
+          setConfirmDeleteEmpresa((p) => ({ ...p, open: v }))
+        }
+        title="Eliminar empresa"
+        description="¿Estás seguro de eliminar esta empresa? Se eliminarán todos los datos asociados y esta acción no se puede deshacer."
+        onConfirm={deleteEmpresa}
+        loading={confirmDeleteEmpresa.loading}
+      />
+
+      <ConfirmModal
+        open={confirmDeleteDoc.open}
+        onOpenChange={(v) => setConfirmDeleteDoc((p) => ({ ...p, open: v }))}
+        title="Eliminar documento"
+        description={`¿Estás seguro de eliminar "${confirmDeleteDoc.doc?.nombre}"? Esta acción no se puede deshacer.`}
+        onConfirm={deleteDocument}
+        loading={confirmDeleteDoc.loading}
+      />
+
+      {/* ── Header ── */}
       <div className="flex items-center justify-between">
-        <Button variant="ghost" size="sm" onClick={() => router.push("/dashboard/empresas")}>
+        <button
+          className="bg-white px-3 py-1.5 rounded-lg text-black cursor-pointer flex items-center gap-x-1"
+          onClick={() => router.push("/dashboard/empresas")}
+        >
           <ArrowLeft className="mr-1 h-4 w-4" />
           Volver
-        </Button>
+        </button>
         <div className="flex gap-2">
           <Button
             variant="outline"
@@ -512,19 +591,21 @@ export default function EmpresaDetailPage() {
             <Edit className="mr-1 h-4 w-4" />
             Editar
           </Button>
-          <button 
-          className="bg-red-500 text-white px-3 py-1.5 rounded-xl flex items-center gap-x-2 cursor-pointer"
-          onClick={deleteEmpresa}>
+          <button
+            className="bg-red-500 text-white px-3 py-1.5 rounded-xl flex items-center gap-x-2 cursor-pointer"
+            onClick={() =>
+              setConfirmDeleteEmpresa({ open: true, loading: false })
+            }
+          >
             <Trash2 className="mr-1 h-4 w-4" />
             Eliminar
           </button>
         </div>
       </div>
 
-      {/* Company Profile Card */}
-      <Card className="overflow-hidden">
+      {/* ── Company Profile Card ── */}
+      <Card className="overflow-hidden bg-white">
         <CardContent className="relative pt-0 pb-6">
-          {/* Logo */}
           <div className="flex justify-center mb-4">
             <div className="bg-white rounded-full p-2 shadow-lg">
               {empresa.logo_url ? (
@@ -541,7 +622,6 @@ export default function EmpresaDetailPage() {
             </div>
           </div>
 
-          {/* Company Info */}
           <div className="text-center space-y-2">
             <h1 className="text-3xl font-bold text-foreground">
               {empresa.razon_social}
@@ -553,7 +633,6 @@ export default function EmpresaDetailPage() {
             </div>
           </div>
 
-          {/* Details Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-8">
             {empresa.email && (
               <div className="flex items-start gap-3">
@@ -566,7 +645,6 @@ export default function EmpresaDetailPage() {
                 </div>
               </div>
             )}
-
             {empresa.telefono && (
               <div className="flex items-start gap-3">
                 <div className="mt-1">
@@ -578,7 +656,6 @@ export default function EmpresaDetailPage() {
                 </div>
               </div>
             )}
-
             {empresa.tipo && (
               <div className="flex items-start gap-3">
                 <div className="mt-1">
@@ -590,7 +667,6 @@ export default function EmpresaDetailPage() {
                 </div>
               </div>
             )}
-
             {empresa.pais && (
               <div className="flex items-start gap-3">
                 <div className="mt-1">
@@ -602,7 +678,6 @@ export default function EmpresaDetailPage() {
                 </div>
               </div>
             )}
-
             {empresa.ciudad && (
               <div className="flex items-start gap-3">
                 <div className="mt-1">
@@ -614,38 +689,41 @@ export default function EmpresaDetailPage() {
                 </div>
               </div>
             )}
-
             {empresa.direccion_fiscal && (
               <div className="flex items-start gap-3">
                 <div className="mt-1">
                   <MapPin className="h-5 w-5 text-muted-foreground" />
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Dirección Fiscal</p>
+                  <p className="text-sm text-muted-foreground">
+                    Dirección Fiscal
+                  </p>
                   <p className="font-medium">{empresa.direccion_fiscal}</p>
                 </div>
               </div>
             )}
-
             {empresa.created_at && (
               <div className="flex items-start gap-3">
                 <div className="mt-1">
                   <Calendar className="h-5 w-5 text-muted-foreground" />
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Fecha de Registro</p>
+                  <p className="text-sm text-muted-foreground">
+                    Fecha de Registro
+                  </p>
                   <p className="font-medium">{formatDate(empresa.created_at)}</p>
                 </div>
               </div>
             )}
-
             {empresa.nombre_ordenes && (
               <div className="flex items-start gap-3">
                 <div className="mt-1">
                   <BookOpen className="h-5 w-5 text-muted-foreground" />
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Nombre de Órdenes</p>
+                  <p className="text-sm text-muted-foreground">
+                    Nombre de Órdenes
+                  </p>
                   <p className="font-medium">{empresa.nombre_ordenes}</p>
                 </div>
               </div>
@@ -654,9 +732,9 @@ export default function EmpresaDetailPage() {
         </CardContent>
       </Card>
 
-      {/* Tabs */}
-      <Tabs defaultValue="documentos">
-        <TabsList className="grid w-full grid-cols-7">
+      {/* ── Tabs ── */}
+      <Tabs defaultValue="documentos" className="">
+        <TabsList className="grid w-full grid-cols-7 bg-white">
           <TabsTrigger value="documentos">
             <FileText className="mr-1 h-4 w-4" />
             Documentos ({documentos.length})
@@ -688,10 +766,12 @@ export default function EmpresaDetailPage() {
         </TabsList>
 
         {/* TAB: DOCUMENTOS ADJUNTOS */}
-        <TabsContent value="documentos" className="mt-4 space-y-4">
+        <TabsContent value="documentos" className="mt-4 space-y-4 ">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-foreground">Documentos Adjuntos</h2>
-            <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
+            <h2 className="text-lg font-semibold text-foreground">
+              Documentos Adjuntos
+            </h2>
+            <Dialog open={uploadOpen} onOpenChange={setUploadOpen} >
               <DialogTrigger asChild>
                 <Button size="sm">
                   <Upload className="mr-1 h-4 w-4" />
@@ -712,7 +792,9 @@ export default function EmpresaDetailPage() {
                     />
                   </div>
                   {uploadingDoc && (
-                    <p className="text-sm text-muted-foreground">Subiendo documento...</p>
+                    <p className="text-sm text-muted-foreground">
+                      Subiendo documento...
+                    </p>
                   )}
                 </div>
               </DialogContent>
@@ -724,7 +806,9 @@ export default function EmpresaDetailPage() {
               {documentos.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 text-center">
                   <FileText className="h-12 w-12 text-muted-foreground mb-4" />
-                  <p className="text-muted-foreground">No hay documentos adjuntos</p>
+                  <p className="text-muted-foreground">
+                    No hay documentos adjuntos
+                  </p>
                   <Button
                     variant="outline"
                     size="sm"
@@ -757,7 +841,7 @@ export default function EmpresaDetailPage() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => viewDocument(doc)}
+                          onClick={() => window.open(doc.url, "_blank")}
                           title="Ver documento"
                         >
                           <Eye className="h-4 w-4" />
@@ -773,7 +857,13 @@ export default function EmpresaDetailPage() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => deleteDocument(doc)}
+                          onClick={() =>
+                            setConfirmDeleteDoc({
+                              open: true,
+                              doc,
+                              loading: false,
+                            })
+                          }
                           title="Eliminar"
                         >
                           <Trash2 className="h-4 w-4 text-destructive" />
@@ -807,7 +897,12 @@ export default function EmpresaDetailPage() {
                     <Label>Nombre *</Label>
                     <Input
                       value={contactForm.nombre}
-                      onChange={(e) => setContactForm((p) => ({ ...p, nombre: e.target.value }))}
+                      onChange={(e) =>
+                        setContactForm((p) => ({
+                          ...p,
+                          nombre: e.target.value,
+                        }))
+                      }
                     />
                   </div>
                   <div className="space-y-2">
@@ -815,26 +910,42 @@ export default function EmpresaDetailPage() {
                     <Input
                       type="email"
                       value={contactForm.email}
-                      onChange={(e) => setContactForm((p) => ({ ...p, email: e.target.value }))}
+                      onChange={(e) =>
+                        setContactForm((p) => ({
+                          ...p,
+                          email: e.target.value,
+                        }))
+                      }
                     />
                   </div>
                   <div className="space-y-2">
                     <Label>Teléfono</Label>
                     <Input
                       value={contactForm.telefono}
-                      onChange={(e) => setContactForm((p) => ({ ...p, telefono: e.target.value }))}
+                      onChange={(e) =>
+                        setContactForm((p) => ({
+                          ...p,
+                          telefono: e.target.value,
+                        }))
+                      }
                     />
                   </div>
                   <div className="space-y-2">
                     <Label>Cargo</Label>
                     <Input
                       value={contactForm.cargo}
-                      onChange={(e) => setContactForm((p) => ({ ...p, cargo: e.target.value }))}
+                      onChange={(e) =>
+                        setContactForm((p) => ({
+                          ...p,
+                          cargo: e.target.value,
+                        }))
+                      }
                     />
                   </div>
                   <button
-                    className=" bg-[#009966] text-white flex items-center gap-x-2 px-3 py-1.5 rounded-lg cursor-pointer mx-auto"
-                  onClick={addContact} >
+                    className="bg-[#009966] text-white flex items-center gap-x-2 px-3 py-1.5 rounded-lg cursor-pointer mx-auto"
+                    onClick={addContact}
+                  >
                     Guardar Contacto
                   </button>
                 </div>
@@ -858,7 +969,10 @@ export default function EmpresaDetailPage() {
                 <TableBody>
                   {contactos.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
+                      <TableCell
+                        colSpan={6}
+                        className="h-24 text-center text-muted-foreground"
+                      >
                         No hay contactos registrados
                       </TableCell>
                     </TableRow>
@@ -876,7 +990,13 @@ export default function EmpresaDetailPage() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => deleteContact(c.id)}
+                            onClick={() =>
+                              setConfirmDeleteContacto({
+                                open: true,
+                                contactoId: c.id,
+                                loading: false,
+                              })
+                            }
                           >
                             <Trash2 className="h-4 w-4 text-destructive" />
                           </Button>
@@ -893,34 +1013,47 @@ export default function EmpresaDetailPage() {
         {/* TAB: USUARIOS */}
         <TabsContent value="usuarios" className="mt-4 space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-foreground">Usuarios de la Empresa</h2>
-            <Dialog open={usuarioOpen} onOpenChange={setUsuarioOpen} >
+            <h2 className="text-lg font-semibold text-foreground">
+              Usuarios de la Empresa
+            </h2>
+            <Dialog open={usuarioOpen} onOpenChange={setUsuarioOpen}>
               <DialogTrigger asChild>
-                <Button size="sm">
+                <button 
+                className="bg-[#009966] text-white px-3 py-1.5 rounded-lg flex items-center gap-x-2 cursor-pointer"
+                >
                   <Plus className="mr-1 h-4 w-4" />
                   Agregar Usuario
-                </Button>
+                </button>
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
                   <DialogTitle>Nuevo Usuario</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-4">
-                    <div className="space-y-2">
+                  <div className="space-y-2">
                     <Label>Nombre *</Label>
                     <Input
                       value={usuarioForm.nombre}
-                      onChange={(e) => setUsuarioForm((p) => ({ ...p, nombre: e.target.value }))}
+                      onChange={(e) =>
+                        setUsuarioForm((p) => ({
+                          ...p,
+                          nombre: e.target.value,
+                        }))
+                      }
                       placeholder="Nombre usuario"
                     />
-                  
                   </div>
                   <div className="space-y-2">
                     <Label>Email *</Label>
                     <Input
                       type="email"
                       value={usuarioForm.email}
-                      onChange={(e) => setUsuarioForm((p) => ({ ...p, email: e.target.value }))}
+                      onChange={(e) =>
+                        setUsuarioForm((p) => ({
+                          ...p,
+                          email: e.target.value,
+                        }))
+                      }
                       placeholder="usuario@empresa.com"
                     />
                   </div>
@@ -929,7 +1062,12 @@ export default function EmpresaDetailPage() {
                     <Input
                       type="password"
                       value={usuarioForm.password}
-                      onChange={(e) => setUsuarioForm((p) => ({ ...p, password: e.target.value }))}
+                      onChange={(e) =>
+                        setUsuarioForm((p) => ({
+                          ...p,
+                          password: e.target.value,
+                        }))
+                      }
                       placeholder="Mínimo 8 caracteres"
                     />
                   </div>
@@ -937,7 +1075,7 @@ export default function EmpresaDetailPage() {
                     <Label>Rol *</Label>
                     <Select
                       value={usuarioForm.rol}
-                      onValueChange={(value: 'admin' | 'tecnico') => 
+                      onValueChange={(value: "admin" | "tecnico") =>
                         setUsuarioForm((p) => ({ ...p, rol: value }))
                       }
                     >
@@ -951,65 +1089,84 @@ export default function EmpresaDetailPage() {
                     </Select>
                   </div>
                   <button
-                    className="bg-[#009966] text-white flex items-center gap-x-2 px-3 py-1.5 rounded-lg cursor-pointer mx-auto"
-                  onClick={addUsuario} >
-                    Guardar Usuario
+                    className="bg-[#009966] text-white flex items-center gap-x-2 px-3 py-1.5 rounded-lg cursor-pointer mx-auto disabled:opacity-50"
+                    onClick={addUsuario}
+                    disabled={savingUsuario}
+                  >
+                    {savingUsuario ? "Guardando..." : "Guardar Usuario"}
                   </button>
                 </div>
               </DialogContent>
             </Dialog>
           </div>
 
+          <section className="flex items-center gap-x-3 ">
+          
+            <input type="text" placeholder="Buscar por nombre, email..." value={busquedaUsuario} onChange={e => setBusquedaUsuario(e.target.value)} className="px-3 py-2 border rounded-md text-sm bg-white max-w-xs" />
+          </section>
           <Card>
             <CardContent className="p-0">
-             <Table>
-  <TableHeader>
-    <TableRow>
-      <TableHead>Nombre</TableHead> {/* ← Cambiado */}
-      <TableHead>Email</TableHead>
-      <TableHead>Rol</TableHead>
-      <TableHead>Fecha Creación</TableHead>
-      <TableHead className="w-12" />
-    </TableRow>
-  </TableHeader>
-  <TableBody>
-    {usuarios.length === 0 ? (
-      <TableRow>
-        <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
-          No hay usuarios registrados
-        </TableCell>
-      </TableRow>
-    ) : (
-      usuarios.map((usuario) => (
-        <TableRow key={usuario.id}>
-          <TableCell className="font-medium">
-            {usuario.nombre} {/* ← Mostrar NOMBRE aquí */}
-          </TableCell>
-          <TableCell>{usuario.email}</TableCell> {/* ← Email en su columna */}
-          <TableCell>
-            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-              usuario.rol === 'admin' 
-                ? 'bg-purple-100 text-purple-800' 
-                : 'bg-blue-100 text-blue-800'
-            }`}>
-              {usuario.rol === 'admin' ? 'Administrador' : 'Técnico'}
-            </span>
-          </TableCell>
-          <TableCell>{formatDate(usuario.created_at)}</TableCell>
-          <TableCell>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => deleteUsuario(usuario.id)}
-            >
-              <Trash2 className="h-4 w-4 text-destructive" />
-            </Button>
-          </TableCell>
-        </TableRow>
-      ))
-    )}
-  </TableBody>
-</Table>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Nombre</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Rol</TableHead>
+                    <TableHead>Fecha Creación</TableHead>
+                    <TableHead className="w-12" />
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {usuarios.length === 0 ? (
+                    <TableRow>
+                      <TableCell
+                        colSpan={5}
+                        className="h-24 text-center text-muted-foreground"
+                      >
+                        No hay usuarios registrados
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    filtradas.map((usuario) => (
+                      <TableRow key={usuario.id}>
+                        <TableCell className="font-medium">
+                          {usuario.nombre}
+                        </TableCell>
+                        <TableCell>{usuario.email}</TableCell>
+                        <TableCell>
+                          <span
+                            className={`px-2 py-1 rounded-full text-xs font-medium ${
+                              usuario.rol === "admin"
+                                ? "bg-purple-100 text-purple-800"
+                                : "bg-blue-100 text-blue-800"
+                            }`}
+                          >
+                            {usuario.rol === "admin"
+                              ? "Administrador"
+                              : "Técnico"}
+                          </span>
+                        </TableCell>
+                        <TableCell>{formatDate(usuario.created_at)}</TableCell>
+                        <TableCell>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() =>
+                              setConfirmDeleteUsuario({
+                                open: true,
+                                usuario,
+                                loading: false,
+                              })
+                            }
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
             </CardContent>
           </Card>
         </TabsContent>
@@ -1017,10 +1174,12 @@ export default function EmpresaDetailPage() {
         {/* TAB: DOCUMENTOS COMERCIALES / ÓRDENES */}
         <TabsContent value="ordenes" className="mt-4 space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-foreground">Documentos Comerciales</h2>
+            <h2 className="text-lg font-semibold text-foreground">
+              Documentos Comerciales
+            </h2>
             <Button
               size="sm"
-              onClick={() => router.push('/dashboard/dasdocumentos/nuevo')}
+              onClick={() => router.push("/dashboard/dasdocumentos/nuevo")}
             >
               <Plus className="mr-1 h-4 w-4" />
               Nueva Orden
@@ -1042,15 +1201,22 @@ export default function EmpresaDetailPage() {
                 <TableBody>
                   {documentosComerciales.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
+                      <TableCell
+                        colSpan={5}
+                        className="h-24 text-center text-muted-foreground"
+                      >
                         No hay documentos comerciales
                       </TableCell>
                     </TableRow>
                   ) : (
                     documentosComerciales.map((doc) => (
                       <TableRow key={doc.id}>
-                        <TableCell className="font-medium">{doc.numero_documento}</TableCell>
-                        <TableCell className="capitalize">{doc.tipo_documento.replace('_', ' ')}</TableCell>
+                        <TableCell className="font-medium">
+                          {doc.numero_documento}
+                        </TableCell>
+                        <TableCell className="capitalize">
+                          {doc.tipo_documento.replace("_", " ")}
+                        </TableCell>
                         <TableCell>{formatDate(doc.fecha_emision)}</TableCell>
                         <TableCell>
                           <StatusBadge value={doc.estado} />
@@ -1059,7 +1225,11 @@ export default function EmpresaDetailPage() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => router.push(`/dashboard/documentos/${doc.id}/totales`)}
+                            onClick={() =>
+                              router.push(
+                                `/dashboard/documentos/${doc.id}/totales`
+                              )
+                            }
                           >
                             <Eye className="h-4 w-4" />
                           </Button>
@@ -1076,9 +1246,10 @@ export default function EmpresaDetailPage() {
         {/* TAB: ACTIVOS */}
         <TabsContent value="activos" className="mt-4 space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-foreground">Activos Asignados</h2>
+            <h2 className="text-lg font-semibold text-foreground">
+              Activos Asignados
+            </h2>
           </div>
-
           <Card>
             <CardContent className="p-0">
               <Table>
@@ -1095,23 +1266,44 @@ export default function EmpresaDetailPage() {
                 <TableBody>
                   {activos.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
+                      <TableCell
+                        colSpan={6}
+                        className="h-24 text-center text-muted-foreground"
+                      >
                         No hay activos asignados
                       </TableCell>
                     </TableRow>
                   ) : (
                     activos.map((activo, index) => (
                       <TableRow key={index}>
-                        <TableCell className="font-medium">{activo.nombre}</TableCell>
-                        <TableCell className="capitalize">{activo.tipo}</TableCell>
+                        <TableCell className="font-medium">
+                          {activo.nombre}
+                        </TableCell>
+                        <TableCell className="capitalize">
+                          {activo.tipo}
+                        </TableCell>
                         <TableCell>{activo.cantidad}</TableCell>
-                        <TableCell>${activo.precio_unitario?.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</TableCell>
-                        <TableCell className="font-semibold">${activo.precio_total?.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</TableCell>
+                        <TableCell>
+                          $
+                          {activo.precio_unitario?.toLocaleString("es-CO", {
+                            minimumFractionDigits: 2,
+                          })}
+                        </TableCell>
+                        <TableCell className="font-semibold">
+                          $
+                          {activo.precio_total?.toLocaleString("es-CO", {
+                            minimumFractionDigits: 2,
+                          })}
+                        </TableCell>
                         <TableCell>
                           <Button
                             variant="link"
                             size="sm"
-                            onClick={() => router.push(`/documentos/${activo.documento_id}/totales`)}
+                            onClick={() =>
+                              router.push(
+                                `/documentos/${activo.documento_id}/totales`
+                              )
+                            }
                           >
                             {activo.documento_numero}
                           </Button>
@@ -1128,9 +1320,10 @@ export default function EmpresaDetailPage() {
         {/* TAB: MANTENIMIENTOS */}
         <TabsContent value="mantenimientos" className="mt-4 space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-foreground">Mantenimientos</h2>
+            <h2 className="text-lg font-semibold text-foreground">
+              Mantenimientos
+            </h2>
           </div>
-
           <Card>
             <CardContent className="p-0">
               <Table>
@@ -1148,24 +1341,40 @@ export default function EmpresaDetailPage() {
                 <TableBody>
                   {mantenimientos.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
+                      <TableCell
+                        colSpan={7}
+                        className="h-24 text-center text-muted-foreground"
+                      >
                         No hay mantenimientos registrados
                       </TableCell>
                     </TableRow>
                   ) : (
                     mantenimientos.map((mant, index) => (
                       <TableRow key={index}>
-                        <TableCell className="font-medium">{mant.titulo}</TableCell>
+                        <TableCell className="font-medium">
+                          {mant.titulo}
+                        </TableCell>
                         <TableCell className="capitalize">{mant.tipo}</TableCell>
-                        <TableCell className="capitalize">{mant.prioridad}</TableCell>
+                        <TableCell className="capitalize">
+                          {mant.prioridad}
+                        </TableCell>
                         <TableCell>{formatDate(mant.fecha_inicio)}</TableCell>
                         <TableCell>{formatDate(mant.fecha_final)}</TableCell>
-                        <TableCell className="font-semibold">${(mant.costo || 0).toLocaleString('es-CO', { minimumFractionDigits: 2 })}</TableCell>
+                        <TableCell className="font-semibold">
+                          $
+                          {(mant.costo || 0).toLocaleString("es-CO", {
+                            minimumFractionDigits: 2,
+                          })}
+                        </TableCell>
                         <TableCell>
                           <Button
                             variant="link"
                             size="sm"
-                            onClick={() => router.push(`/documentos/${mant.documento_id}/totales`)}
+                            onClick={() =>
+                              router.push(
+                                `/documentos/${mant.documento_id}/totales`
+                              )
+                            }
                           >
                             {mant.documento_numero}
                           </Button>
@@ -1184,7 +1393,6 @@ export default function EmpresaDetailPage() {
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-foreground">Montajes</h2>
           </div>
-
           <Card>
             <CardContent className="p-0">
               <Table>
@@ -1202,24 +1410,40 @@ export default function EmpresaDetailPage() {
                 <TableBody>
                   {montajes.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
+                      <TableCell
+                        colSpan={7}
+                        className="h-24 text-center text-muted-foreground"
+                      >
                         No hay montajes registrados
                       </TableCell>
                     </TableRow>
                   ) : (
                     montajes.map((mont, index) => (
                       <TableRow key={index}>
-                        <TableCell className="font-medium">{mont.titulo}</TableCell>
+                        <TableCell className="font-medium">
+                          {mont.titulo}
+                        </TableCell>
                         <TableCell className="capitalize">{mont.tipo}</TableCell>
-                        <TableCell className="capitalize">{mont.prioridad}</TableCell>
+                        <TableCell className="capitalize">
+                          {mont.prioridad}
+                        </TableCell>
                         <TableCell>{formatDate(mont.fecha_inicio)}</TableCell>
                         <TableCell>{formatDate(mont.fecha_final)}</TableCell>
-                        <TableCell className="font-semibold">${(mont.costo || 0).toLocaleString('es-CO', { minimumFractionDigits: 2 })}</TableCell>
+                        <TableCell className="font-semibold">
+                          $
+                          {(mont.costo || 0).toLocaleString("es-CO", {
+                            minimumFractionDigits: 2,
+                          })}
+                        </TableCell>
                         <TableCell>
                           <Button
                             variant="link"
                             size="sm"
-                            onClick={() => router.push(`/documentos/${mont.documento_id}/totales`)}
+                            onClick={() =>
+                              router.push(
+                                `/documentos/${mont.documento_id}/totales`
+                              )
+                            }
                           >
                             {mont.documento_numero}
                           </Button>

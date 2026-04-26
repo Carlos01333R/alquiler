@@ -2,7 +2,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { useRouter, useParams, useSearchParams } from 'next/navigation'
+import { useRouter, useParams, useSearchParams, usePathname } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import Image from 'next/image'
 import type {
@@ -16,6 +16,9 @@ import { toast } from "sonner"
 // @ts-ignore
 import "./totales.css"
 import { formatearFecha } from "@/utils/FormatDate"
+import Link from 'next/link'
+import BackButton from '../BackBotton'
+import { ArrowLeft } from 'lucide-react'
 
 interface ActivoSeleccionado {
   activo_id: string
@@ -72,11 +75,13 @@ function desgloseActivo(activo: ActivoSeleccionado): string {
 export default function TotalesDocumentoPage() {
   const router = useRouter()
   const params = useParams()
+  const pathname = usePathname();
   const searchParams = useSearchParams()
   const facturaRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const documentoId = params.id as string
+   const segmento = pathname.split("/")[2]; 
   const docRelacionadoId = searchParams.get('doc_relacionado_id')
 
   const [loading, setLoading] = useState(true)
@@ -457,11 +462,53 @@ export default function TotalesDocumentoPage() {
     }
   }
 
+
   if (loading) return <div className="page-container"><div className="card"><p>Cargando...</p></div></div>
-  if (!documento || !detalle || !empresa) return <div className="page-container"><div className="card"><p>No se encontraron los datos del documento</p></div></div>
+  if (!documento || !detalle || !empresa) return(
+    <div className="w-[90%] max-w-4xl mx-auto px-4 py-6 bg-white rounded-lg shadow-md">
+      
+      <section className='flex items-center'>
+        <button onClick={() => router.back()} className="btn btn-secondary mr-4">
+          <ArrowLeft  className="mr-1 h-4 w-4" />
+          Volver</button>
+         
+      </section>
+  
+  <p className='text-center font-bold  text-2xl text-red-500'>
+       No se pudo cargar los datos del documento
+     </p>
+
+     <section className='py-4 space-y-4'>
+      <p className="font-bold text-xl">Guia</p>
+      <p>1. No se logro logro cargar los datos del documento o los detalles del documento. vuelve a los detalles del documento, seleccionas los servicios que quieras incluir para continuar.</p>
+
+       <p>2. Ir a los detalles del documento
+       <Link
+       className='text-blue-500 underline text-lg font-bold px-2'
+     href={`/dashboard/${segmento}/${documentoId ?? ''}/detalles`}>aquí</Link> y selecciona los servicios que quieras incluir y luego <strong>PRESIONA EL BOTON DE "CONTINUAR A TOTALES"</strong> como se indica en la imagen.</p>
+    <div className='flex items-center justify-center py-2'>
+      <Image src="/detalles.jpg" alt="Error cargando datos" width={600} height={600} />
+  
+    </div>
+
+   
+      
+    <p>3. Una vez estes en el totales, donde puedes ver la factura de tus servicios, debes guardar la factura en <strong>"GUARDAR DOCUMENTO (ORDEN DE COMPRA, COTIZACION, FACTURA)"</strong>como se indica en la imagen.</p>
+    
+      <div className='flex items-center justify-center py-2'>
+        <Image src="/totales.png" alt="Guardar documento" width={600} height={600} />
+    
+      </div>
+    
+     </section>
+    </div>
+  )
 
   const activos = (detalle.activos_seleccionados as unknown as ActivoSeleccionado[]) || []
+ 
+
   const mantenimientos = (detalle.mantenimientos as unknown as MantenimientoDetalle[]) || []
+  console.log('Mantenimientos para totales:', mantenimientos) // Log para verificar datos
   const montajes = (detalle.montajes as unknown as MontajeDetalle[]) || []
 
   const tipoLabel: Record<string, string> = {
@@ -475,6 +522,8 @@ export default function TotalesDocumentoPage() {
     cotizacion: 'Guardar Cotización',
     factura: 'Guardar Factura',
   }
+
+
 
   return (
     <div className="totales-page-wrapper">
@@ -549,16 +598,21 @@ export default function TotalesDocumentoPage() {
               </div>
 
               <div className="documento-info">
+               {documento.subtipo_documento && (
+                <h2 className="documento-tipo">
+                  {documento.subtipo_documento}
+                </h2>
+               )}
+               {!documento.subtipo_documento && (
                 <h2 className="documento-tipo">{tipoLabel[documento.tipo_documento] ?? documento.tipo_documento.replace('_', ' ')}</h2>
+               )}
                 <p className="documento-numero">{documento.numero_documento}</p>
                 <p className="text-sm">
                   Fecha: {new Date(documento.fecha_emision + 'T00:00:00').toLocaleDateString('es-CO', {
                     timeZone: 'America/Bogota', year: 'numeric', month: 'long', day: 'numeric'
                   })}
                 </p>
-                <div className="estado-badge">
-                  <span>{documento.estado.toUpperCase()}</span>
-                </div>
+              
                 {docRelacionadoInfo && (
                   <p className="text-xs mt-2 text-gray-500">
                     Ref. {docRelacionadoInfo.tipo_documento.replace('_', ' ')}: {docRelacionadoInfo.numero_documento}
@@ -601,6 +655,8 @@ export default function TotalesDocumentoPage() {
                     <th>Descripción</th>
                     <th>Tipo</th>
                     <th className="text-right">Cant.</th>
+                    <th className="text-right">Fecha inicio</th>
+                    <th className="text-right">Fecha fin</th>
                     <th className="text-right">Días</th>
                     <th className="text-right">Precio/día</th>
                     <th className="text-right">Precio/mes</th>
@@ -610,14 +666,28 @@ export default function TotalesDocumentoPage() {
                 </thead>
                 <tbody>
                   {activos.map((activo, index) => (
+
+                    
                     <tr key={index}>
                       <td>
-                       
-                        <button
+                     {(activo.tipo === 'equipo' || activo.tipo === 'herramienta') && (
+                      <button
                         onClick={() => router.push(`/dashboard/activos/${activo.activo_id}`)}
-                        className="font-medium text-blue-500 underline cursor-pointer">
-                          
-                          {activo.nombre}</button>
+                        className="font-medium text-blue-500 underline cursor-pointer"
+                      >
+                        {activo.nombre}
+                      </button>
+                    )}
+
+                    {(activo.tipo === 'kit_equipos' || activo.tipo === 'maleta_herramientas') && (
+                      <button
+                        onClick={() => router.push(`/dashboard/activos/set/${activo.activo_id}`)}
+                        className="font-medium text-blue-500 underline cursor-pointer"
+                      >
+                        {activo.nombre}
+                      </button>
+                    )}
+
                         {(Number(activo.dias_totales) || 0) > 0 && (
                           <div className="text-xs text-gray-400 mt-0.5">{desgloseActivo(activo)}</div>
                         )}
@@ -629,6 +699,19 @@ export default function TotalesDocumentoPage() {
                       </td>
                       <td className="text-sm">{activo.tipo}</td>
                       <td className="text-right">{Number(activo.cantidad) || 1}</td>
+                      <td className="text-right">
+                         {activo.fecha_inicio
+                          ? new Date(activo.fecha_inicio).toLocaleDateString('es-CO')
+                          : <span className="text-gray-300">—</span>
+                        }
+                      </td>
+                      <td className="text-right">
+                         {activo.fecha_fin
+                          ? new Date(activo.fecha_fin).toLocaleDateString('es-CO')
+                          : <span className="text-gray-300">—</span>
+                        }
+                      </td>
+                      
                       <td className="text-right">{Number(activo.dias_totales) || 0}</td>
                       <td className="text-right">${fmt(activo.precio_dia)}</td>
                       <td className="text-right">${fmt(activo.precio_mes)}</td>
@@ -655,6 +738,8 @@ export default function TotalesDocumentoPage() {
                   <tr>
                     <th>Descripción</th>
                     <th>Tipo</th>
+                    <th>Fecha inicio</th>
+                    <th>Fecha fin</th>
                     <th>Prioridad</th>
                     <th className="text-right">Valor</th>
                   </tr>
@@ -662,11 +747,28 @@ export default function TotalesDocumentoPage() {
                 <tbody>
                   {mantenimientos.map((mant: any, index) => (
                     <tr key={index}>
+                      
                       <td>
                         <div className="font-bold">{mant.titulo}</div>
-                        {mant.descripcion && <div className="text-sm text-gray-500">{mant.descripcion}</div>}
+                        {mant.descripcion && <div
+                         className="text-sm text-gray-500">{mant.descripcion}</div>}
                       </td>
+                      
                       <td className="text-sm capitalize">{mant.tipo}</td>
+                      <td className="text-sm capitalize">
+                        {mant.fecha_inicio
+                          ? new Date(mant.fecha_inicio + 'T00:00:00').toLocaleDateString('es-CO')
+                          : <span className="text-gray-300">—</span>
+                        }
+                      </td>
+                        <td className="text-sm capitalize">
+                       {mant.fecha_final
+                          ? new Date(mant.fecha_final + 'T00:00:00').toLocaleDateString('es-CO')
+                          : <span className="text-gray-300">—</span>
+                        }
+                      </td>
+                    
+                      
                       <td className="text-sm capitalize">{mant.prioridad || 'N/A'}</td>
                       <td className="text-right font-bold">${fmt(mant.costo)}</td>
                     </tr>
@@ -685,6 +787,8 @@ export default function TotalesDocumentoPage() {
                   <tr>
                     <th>Descripción</th>
                     <th>Tipo</th>
+                    <th>Fecha inicio</th>
+                    <th>Fecha final</th>
                     <th>Prioridad</th>
                     <th className="text-right">Valor</th>
                   </tr>
@@ -697,6 +801,18 @@ export default function TotalesDocumentoPage() {
                         {mont.descripcion && <div className="text-sm text-gray-500">{mont.descripcion}</div>}
                       </td>
                       <td className="text-sm capitalize">{mont.tipo}</td>
+                        <td className="text-sm capitalize">
+                        {mont.fecha_inicio
+                          ? new Date(mont.fecha_inicio + 'T00:00:00').toLocaleDateString('es-CO')
+                          : <span className="text-gray-300">—</span>
+                        }
+                      </td>
+                        <td className="text-sm capitalize">
+                       {mont.fecha_final
+                          ? new Date(mont.fecha_final + 'T00:00:00').toLocaleDateString('es-CO')
+                          : <span className="text-gray-300">—</span>
+                        }
+                      </td>
                       <td className="text-sm capitalize">{mont.prioridad || 'N/A'}</td>
                       <td className="text-right font-bold">${fmt(mont.costo)}</td>
                     </tr>

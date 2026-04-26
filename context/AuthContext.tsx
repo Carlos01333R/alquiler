@@ -4,7 +4,7 @@ import React, { createContext, useContext, useEffect, useMemo, useState } from "
 import type { User } from "@supabase/supabase-js"
 import { supabase } from "@/lib/supabase"
 
-// ✅ IDs de usuarios autorizados
+
 const AUTHORIZED_USER_IDS = new Set([
   "d4d7ca79-e3c8-400a-bc53-75ffd11f57a8",
   "48cf5b04-1ad8-4aed-9189-99cf97f75067",
@@ -42,7 +42,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       const sessionUser = data.session?.user ?? null
 
-      // Si hay sesión pero el usuario no está autorizado, cerrar sesión
       if (sessionUser && !AUTHORIZED_USER_IDS.has(sessionUser.id)) {
         await supabase.auth.signOut()
         setUser(null)
@@ -81,7 +80,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (error || !data.user) return { success: false }
 
-    // Verificar autorización tras autenticarse
     if (!AUTHORIZED_USER_IDS.has(data.user.id)) {
       await supabase.auth.signOut()
       return { success: false, unauthorized: true }

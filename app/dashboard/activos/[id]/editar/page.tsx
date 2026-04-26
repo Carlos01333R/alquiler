@@ -7,6 +7,7 @@ import type { Activo } from "@/lib/types"
 import { ActivoForm } from "@/components/activo-form"
 import { Button } from "@/components/ui/button"
 import { ArrowLeft } from "lucide-react"
+import BackButton from "@/components/BackBotton"
 
 export default function ActivoEditPage() {
   const params = useParams()
@@ -49,26 +50,18 @@ export default function ActivoEditPage() {
   if (!activo) {
     return (
       <div className="space-y-4">
-        <Button variant="ghost" size="sm" onClick={() => router.push("/dashboard/activos")}>
-          <ArrowLeft className="mr-1 h-4 w-4" />
-          Volver
-        </Button>
+        
+        <BackButton href={`/dashboard/activos`} label="Volver" />
         <p className="text-muted-foreground">Activo no encontrado</p>
       </div>
     )
   }
 
   return (
-    <div className="space-y-6">
+    <div className="w-[90%] max-w-6xl mx-auto p-6 space-y-4">
       <div className="flex items-center gap-4">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => router.push(`/dashboard/activos/${id}`)}
-        >
-          <ArrowLeft className="mr-1 h-4 w-4" />
-          Volver al perfil
-        </Button>
+       
+        <BackButton href={`/dashboard/activos/${id}`} label="Volver" />
       </div>
 
       <ActivoForm activo={activo} />

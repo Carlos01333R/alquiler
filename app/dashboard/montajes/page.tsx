@@ -94,10 +94,12 @@ export default function MontajesPage() {
           <h1 className="text-2xl font-bold tracking-tight text-foreground">Montajes</h1>
           <p className="text-muted-foreground">Órdenes de montaje</p>
         </div>
-        <Button onClick={() => router.push("/dashboard/montajes/nuevo")}>
+        <button
+          className="bg-gray-50 flex items-center rounded-md bg-primary px-3 py-2 text-sm font-medium text-black shadow-lg cursor-pointer"
+         onClick={() => router.push("/dashboard/montajes/nuevo")}>
           <Plus className="mr-2 h-4 w-4" />
           Nuevo Montaje
-        </Button>
+        </button>
       </div>
       <DataTable
         data={data as unknown as Record<string, unknown>[]}

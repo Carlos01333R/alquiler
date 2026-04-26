@@ -294,3 +294,27 @@ export function manejarError(error: any): string {
 
   return 'Ha ocurrido un error inesperado. Por favor intente nuevamente.'
 }
+
+
+export function calcularPrecioActivo(
+  dias: number,
+  precioDia: number,
+  precioMes: number,
+  cantidad: number
+): number {
+  if (dias <= 0 || cantidad <= 0) return 0
+  const meses = Math.floor(dias / 30)
+  const diasRestantes = dias % 30
+  const precio = meses * precioMes + diasRestantes * precioDia
+  return Math.round(precio * cantidad * 100) / 100
+}
+
+export function calcularDias(inicio: string, fin: string): number {
+  if (!inicio || !fin) return 0
+  const [ai, mi, di] = inicio.split('-').map(Number)
+  const [af, mf, df] = fin.split('-').map(Number)
+  const i = new Date(ai, mi - 1, di)
+  const f = new Date(af, mf - 1, df)
+  const d = Math.round((f.getTime() - i.getTime()) / 86400000)
+  return d >= 0 ? d + 1 : 0  // ✅ +1 incluye el día de inicio, >= 0 permite mismo día = 1
+}

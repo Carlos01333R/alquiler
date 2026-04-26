@@ -230,14 +230,14 @@
 
 .data-table th {
   text-align: left;
-  padding: 12px 16px;
+  padding: 6px 6px;
   font-weight: 600;
   color: #000000;
   border: 1px solid #333333;
 }
 
 .data-table td {
-  padding: 12px 16px;
+  padding: 6px 6px;
   border: 1px solid #333333;
   color: #000000;
 }

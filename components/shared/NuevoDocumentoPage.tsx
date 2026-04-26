@@ -15,6 +15,7 @@ import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import type { Empresa } from '@/types/database.types'
 import { toast } from 'sonner'
+import { ArrowLeft } from 'lucide-react'
 
 interface Props {
   tipo: 'orden_compra' | 'cotizacion' | 'otros_documentos'
@@ -155,7 +156,8 @@ const LABELS_DOC: Record<typeof ESTADOS_DOC[number], string> = {
 }
 
   return (
-    <div className="max-w-3xl mx-auto p-6">
+    <div className="max-w-4xl mx-auto p-4">
+     
       <div className="bg-white rounded-lg shadow-md p-6">
 
         {/* Header */}
@@ -288,8 +290,9 @@ const LABELS_DOC: Record<typeof ESTADOS_DOC[number], string> = {
             <button type="button" onClick={() => router.push(backPath)} className="px-5 py-2 border border-gray-300 rounded-md text-sm hover:bg-gray-50">
               Cancelar
             </button>
-            <button type="submit" disabled={loading} className={`px-5 py-2 text-white rounded-md text-sm font-medium disabled:opacity-50 ${ACCENT[tipo]}`}>
-              {loading ? 'Guardando...' : 'Continuar a detalles →'}
+            <button type="submit" disabled={loading} className={`px-5 py-2  rounded-md text-sm font-medium disabled:opacity-50 ${ACCENT[tipo]}`}>
+              <p className='text-white'> {loading ? 'Guardando...' : 'Continuar a detalles →'}</p>
+             
             </button>
           </div>
         </form>

@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
+import { Eye } from 'lucide-react'
 
 interface Documento {
   id: string
@@ -37,7 +38,7 @@ export default function FacturasPage() {
     try {
       const { data, error } = await supabase
         .from('documentos_comerciales')
-        .select('*, empresa:empresas(razon_social, nit)')
+         .select('*, empresa:empresas(razon_social, nit), detalles_documentos_comerciales!inner(id)')
         .eq('tipo_documento', 'otros_documentos')
         .order('created_at', { ascending: false })
       if (error) throw error
@@ -113,10 +114,10 @@ export default function FacturasPage() {
               onClick={() => router.push('/dashboard/otros_documentos/nuevo')}
               className="px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 flex items-center gap-2 text-sm font-medium transition-colors"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4" fill="none" stroke="#fff" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
               </svg>
-              Nuevo Documento
+             <p className="text-white">Nuevo Documento</p>
             </button>
           </div>
 
@@ -194,13 +195,15 @@ export default function FacturasPage() {
                       </td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-3">
-                          <button onClick={() => router.push(`/dashboard/otros_documentos/${doc.id}/totales`)} className="text-emerald-600 hover:text-emerald-800 text-sm font-medium">Ver</button>
+                          <button onClick={() => router.push(`/dashboard/otros_documentos/${doc.id}/totales`)} className=" hover:text-emerald-800 text-sm font-medium cursor-pointer">
+                            <Eye className="w-5 h-5 text-emerald-600" />
+                          </button>
                           <button
                             onClick={() => router.push(`/dashboard/otros_documentos/${doc.id}/detalles?empresa_id=${doc.empresa_id}&modo=editar`)}
-                            className="text-gray-400 hover:text-emerald-600 transition-colors"
+                            className="text-gray-400 hover:text-emerald-600 transition-colors cursor-pointer"
                             title="Editar"
                           >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                             </svg>
                           </button>

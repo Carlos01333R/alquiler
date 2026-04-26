@@ -127,8 +127,13 @@ export type Mantenimiento = {
   fecha_final: string | null
   actividades_programadas: {nombre: string; completada: boolean}[]
   repuestos_requeridos: {nombre: string; cantidad: number; unidad: string}[]
- 
-  archivo_adjunto: string | null
+ archivos_adjuntos?: {
+  url: string
+  name: string
+  type: string
+  size: number
+  uploaded_at: string
+}[]
   created_at: string
   updated_at: string
   empresas?: Empresa

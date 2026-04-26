@@ -21,8 +21,6 @@ export default function ResetPasswordPage() {
     if (processed.current) return;
     processed.current = true;
 
-    // Supabase manda el token en el hash de la URL:
-    // /reset-password#access_token=xxx&refresh_token=yyy&type=recovery
     const hash = window.location.hash.substring(1);
     const params = new URLSearchParams(hash);
     const accessToken = params.get("access_token");
@@ -30,7 +28,7 @@ export default function ResetPasswordPage() {
     const type = params.get("type");
 
     if (accessToken && refreshToken && type === "recovery") {
-      // Establecer sesión manualmente con los tokens del hash
+
       supabase.auth
         .setSession({ access_token: accessToken, refresh_token: refreshToken })
         .then(({ error }) => {
@@ -38,13 +36,11 @@ export default function ResetPasswordPage() {
             console.error("Error al establecer sesión:", error.message);
             setStep("invalid");
           } else {
-            // Limpiar el hash para que no se reutilice con F5
             window.history.replaceState(null, "", window.location.pathname);
             setStep("form");
           }
         });
     } else {
-      // No hay hash válido en la URL
       setStep("invalid");
     }
   }, []);
@@ -78,7 +74,6 @@ export default function ResetPasswordPage() {
       return;
     }
 
-    // Cerrar la sesión temporal usada solo para el reset
     await supabase.auth.signOut();
     setStep("success");
   };
@@ -97,7 +92,6 @@ export default function ResetPasswordPage() {
     );
   }
 
-  // ── Token inválido / expirado ─────────────────────────────────────────────
   if (step === "invalid") {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
@@ -124,7 +118,6 @@ export default function ResetPasswordPage() {
     );
   }
 
-  // ── Éxito ─────────────────────────────────────────────────────────────────
   if (step === "success") {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
@@ -145,7 +138,6 @@ export default function ResetPasswordPage() {
     );
   }
 
-  // ── Formulario ────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 w-full max-w-md">
@@ -160,7 +152,7 @@ export default function ResetPasswordPage() {
         <p className="text-gray-500 text-sm mb-7">Elige una contraseña segura para tu cuenta.</p>
 
         <div className="space-y-4">
-          {/* Nueva contraseña */}
+       
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">
               Nueva contraseña
@@ -208,7 +200,6 @@ export default function ResetPasswordPage() {
             )}
           </div>
 
-          {/* Confirmar contraseña */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">
               Confirmar contraseña
@@ -254,7 +245,6 @@ export default function ResetPasswordPage() {
             )}
           </div>
 
-          {/* Error general */}
           {errorMsg && (
             <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
               <svg className="w-4 h-4 text-red-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">

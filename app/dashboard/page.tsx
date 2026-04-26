@@ -28,6 +28,9 @@ interface Stats {
   montajesPendientes: number
   solicitudes: number
   solicitudesAbiertas: number
+  alquilados: number
+  proximos_vencer: number
+  vencidos: number
 }
 
 interface SolicitudesPorEstado {
@@ -51,50 +54,76 @@ export default function DashboardPage() {
     montajesPendientes: 0,
     solicitudes: 0,
     solicitudesAbiertas: 0,
+    alquilados: 0,
+    proximos_vencer: 0,
+    vencidos: 0,
+
   })
   const [solicitudesPorEstado, setSolicitudesPorEstado] = useState<SolicitudesPorEstado>({
     pendiente: 0,
-    en_proceso: 0,
+    en_proceso: 0,  
     completada: 0,
     cancelada: 0,
   })
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    async function load() {
-      try {
-        // Cargar datos generales
-        const [empresas, activos, sets, mantenimientos, montajes, solicitudes] =
-          await Promise.all([
-            supabase.from("empresas").select("estado"),
-            supabase.from("activos").select("estado_disponibilidad"),
-            supabase.from("sets_activos").select("id", { count: "exact", head: true }),
-            supabase.from("mantenimientos").select("estado"),
-            supabase.from("montajes").select("estado"),
-            supabase.from("solicitudes").select("estado"),
-          ])
+ useEffect(() => {
+  async function load() {
+    try {
+      // Fecha actual en Colombia (UTC-5)
+      const ahora = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Bogota" }))
+      const hoy = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate())
+      const en10Dias = new Date(hoy)
+      en10Dias.setDate(hoy.getDate() + 10)
 
-        const empresasData = empresas.data || []
-        const activosData = activos.data || []
-        const mantenimientosData = mantenimientos.data || []
-        const montajesData = montajes.data || []
-        const solicitudesData = solicitudes.data || []
+      const [empresas, activos, sets, mantenimientos, montajes, solicitudes] =
+        await Promise.all([
+          supabase.from("empresas").select("estado"),
+          supabase.from("activos").select("estado_disponibilidad, fecha_proxima_certificacion"),
+          supabase.from("sets_activos").select("id", { count: "exact", head: true }),
+          supabase.from("mantenimientos").select("estado"),
+          supabase.from("montajes").select("estado"),
+          supabase.from("solicitudes").select("estado"),
+        ])
 
-        // Calcular estadísticas
-        setStats({
-          empresas: empresasData.length,
-          empresasActivas: empresasData.filter((e: any) => e.estado === 'activo').length,
-          activos: activosData.length,
-          activosDisponibles: activosData.filter((a: any) => a.estado_disponibilidad === 'disponible').length,
-          activosMantenimiento: activosData.filter((a: any) => a.estado_disponibilidad === 'en_mantenimiento').length,
-          sets: sets.count ?? 0,
-          mantenimientos: mantenimientosData.length,
-          mantenimientosPendientes: mantenimientosData.filter((m: any) => m.estado === 'pendiente').length,
-          montajes: montajesData.length,
-          montajesPendientes: montajesData.filter((m: any) => m.estado === 'pendiente').length,
-          solicitudes: solicitudesData.length,
-          solicitudesAbiertas: solicitudesData.filter((s: any) => s.estado === 'pendiente' || s.estado === 'en_proceso').length,
-        })
+      const empresasData = empresas.data || []
+      const activosData = activos.data || []
+      const mantenimientosData = mantenimientos.data || []
+      const montajesData = montajes.data || []
+      const solicitudesData = solicitudes.data || []
+
+      // Calcular proximos a vencer y vencidos desde activos
+      const proximosVencer = activosData.filter((a: any) => {
+        if (!a.fecha_proxima_certificacion) return false
+        const fechaProxima = new Date(a.fecha_proxima_certificacion + "T00:00:00")
+        return fechaProxima > hoy && fechaProxima <= en10Dias
+      }).length
+
+      const vencidos = activosData.filter((a: any) => {
+        if (!a.fecha_proxima_certificacion) return false
+        const fechaProxima = new Date(a.fecha_proxima_certificacion + "T00:00:00")
+        return fechaProxima < hoy
+      }).length
+
+      setStats({
+        empresas: empresasData.length,
+        empresasActivas: empresasData.filter((e: any) => e.estado === 'activo').length,
+        activos: activosData.length,
+        activosDisponibles: activosData.filter((a: any) => a.estado_disponibilidad === 'disponible').length,
+        activosMantenimiento: activosData.filter((a: any) => a.estado_disponibilidad === 'en_mantenimiento').length,
+        sets: sets.count ?? 0,
+        mantenimientos: mantenimientosData.length,
+        mantenimientosPendientes: mantenimientosData.filter((m: any) => m.estado === 'pendiente').length,
+        montajes: montajesData.length,
+        montajesPendientes: montajesData.filter((m: any) => m.estado === 'pendiente').length,
+        solicitudes: solicitudesData.length,
+        solicitudesAbiertas: solicitudesData.filter((s: any) => s.estado === 'pendiente' || s.estado === 'en_proceso').length,
+        // ✅ Alquilados desde estado_disponibilidad de activos
+        alquilados: activosData.filter((a: any) => a.estado_disponibilidad === 'alquilado').length,
+        // ✅ Calculados con fecha Colombia
+        proximos_vencer: proximosVencer,
+        vencidos: vencidos,
+      })
 
         // Calcular solicitudes por estado
         setSolicitudesPorEstado({
@@ -248,7 +277,7 @@ export default function DashboardPage() {
               </div>
               <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden">
                 <div
-                  className="bg-gradient-to-r from-blue-500 to-blue-600 h-3 rounded-full transition-all duration-500"
+                  className="bg-linear-to-r from-blue-500 to-blue-600 h-3 rounded-full transition-all duration-500"
                   style={{ width: `${(solicitudesPorEstado.pendiente / maxSolicitudes) * 100}%` }}
                 ></div>
               </div>
@@ -261,7 +290,7 @@ export default function DashboardPage() {
               </div>
               <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden">
                 <div
-                  className="bg-gradient-to-r from-amber-500 to-amber-600 h-3 rounded-full transition-all duration-500"
+                  className="bg-linear-to-r from-amber-500 to-amber-600 h-3 rounded-full transition-all duration-500"
                   style={{ width: `${(solicitudesPorEstado.en_proceso / maxSolicitudes) * 100}%` }}
                 ></div>
               </div>
@@ -274,7 +303,7 @@ export default function DashboardPage() {
               </div>
               <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden">
                 <div
-                  className="bg-gradient-to-r from-emerald-500 to-emerald-600 h-3 rounded-full transition-all duration-500"
+                  className="bg-linear-to-r from-emerald-500 to-emerald-600 h-3 rounded-full transition-all duration-500"
                   style={{ width: `${(solicitudesPorEstado.completada / maxSolicitudes) * 100}%` }}
                 ></div>
               </div>
@@ -287,7 +316,7 @@ export default function DashboardPage() {
               </div>
               <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden">
                 <div
-                  className="bg-gradient-to-r from-slate-400 to-slate-500 h-3 rounded-full transition-all duration-500"
+                  className="bg-linear-to-r from-slate-400 to-slate-500 h-3 rounded-full transition-all duration-500"
                   style={{ width: `${(solicitudesPorEstado.cancelada / maxSolicitudes) * 100}%` }}
                 ></div>
               </div>
@@ -328,6 +357,7 @@ export default function DashboardPage() {
                       strokeDasharray={`${stats.activos > 0 ? (stats.activosDisponibles / stats.activos) * 502.4 : 0} 502.4`}
                       className="transition-all duration-500"
                     />
+      
                     <circle
                       cx="96"
                       cy="96"
@@ -359,9 +389,33 @@ export default function DashboardPage() {
                 <span className="text-sm font-bold text-slate-900">{stats.activosDisponibles}</span>
               </div>
 
-              <div className="flex items-center justify-between p-3 bg-amber-50 rounded-lg">
+               <div className="flex items-center justify-between p-3 bg-emerald-800 rounded-lg">
                 <div className="flex items-center gap-3">
-                  <div className="w-3 h-3 bg-amber-500 rounded-full"></div>
+                  <div className="w-3 h-3 bg-emerald-50 rounded-full"></div>
+                  <span className="text-sm font-medium text-white">Alquilados</span>
+                </div>
+                <span className="text-sm font-bold text-white">{stats.alquilados}</span>
+              </div>
+
+              <div className="flex items-center justify-between p-3 bg-orange-100 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <div className="w-3 h-3 bg-orange-500 rounded-full"></div>
+                  <span className="text-sm font-medium text-slate-700">Proximos Vencer</span>
+                </div>
+                <span className="text-sm font-bold text-slate-900">{stats.proximos_vencer}</span>
+              </div>
+
+              <div className="flex items-center justify-between p-3 bg-red-50 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+                  <span className="text-sm font-medium text-slate-700">Vencidos</span>
+                </div>
+                <span className="text-sm font-bold text-slate-900">{stats.vencidos}</span>
+              </div>
+
+              <div className="flex items-center justify-between p-3 bg-yellow-50 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
                   <span className="text-sm font-medium text-slate-700">En Mantenimiento</span>
                 </div>
                 <span className="text-sm font-bold text-slate-900">{stats.activosMantenimiento}</span>
@@ -382,9 +436,9 @@ export default function DashboardPage() {
       </div>
 
       {/* Banner de Estado */}
-      <div className="bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl shadow-lg p-6 text-white">
+      <div className="hidden bg-linear-to-br from-blue-600 to-blue-700 rounded-xl shadow-lg p-6 text-white">
         <div className="flex items-center gap-4">
-          <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center flex-shrink-0">
+          <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center shrink-0">
             <CheckCircle className="w-6 h-6" />
           </div>
           <div>

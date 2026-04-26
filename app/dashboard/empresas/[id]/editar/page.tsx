@@ -59,16 +59,15 @@ export default function EmpresaEditPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="w-full max-w-5xl mx-auto p-6 space-y-4">
       <div className="flex items-center gap-4">
-        <Button
-          variant="ghost"
-          size="sm"
+        <button
+          className="bg-white px-3 py-1.5 rounded-lg text-black cursor-pointer flex items-center gap-x-1"
           onClick={() => router.push(`/dashboard/empresas/${id}`)}
         >
           <ArrowLeft className="mr-1 h-4 w-4" />
           Volver al perfil
-        </Button>
+        </button>
       </div>
 
       <EmpresaForm empresa={empresa} />

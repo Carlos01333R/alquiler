@@ -283,7 +283,7 @@ export function EmpresaForm({ empresa }: EmpresaFormProps) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="w-[90%] md:max-w-5xl mx-auto">
+    <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-md">
       <Card>
         <CardHeader>
           <CardTitle>{isEdit ? "Editar Empresa" : "Nueva Empresa"}</CardTitle>

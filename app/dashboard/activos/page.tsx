@@ -50,11 +50,17 @@ export default function ActivosPage() {
       label: "Disponibilidad",
       render: (item: Activo) => <StatusBadge value={item.estado_disponibilidad} />,
     },
-    { key: "stock", label: "Stock" },
     {
       key: "estado_certificacion",
-      label: "Certificacion",
+      label: "Certificación",
       render: (item: Activo) => <StatusBadge value={item.estado_certificacion} />,
+    },
+    {
+      key: "Proxima_Certificacion",
+      label: "Proxima Certificación",
+      render: (item: Activo) => <span className="text-right">
+        {new Date(item.fecha_proxima_certificacion + 'T00:00:00').toLocaleDateString('es-CO')}
+        </span>,
     },
     {
       key: "precio_dia",
@@ -66,7 +72,6 @@ export default function ActivosPage() {
       label: "Precio/mes",
       render: (item: Activo) => <span className="text-right">${item.precio_mes.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</span>, 
     }
-    
   ]
 
   const setColumns = [
@@ -77,6 +82,7 @@ export default function ActivosPage() {
       render: (item: SetActivo) => <StatusBadge value={item.tipo} />,
     },
     { key: "serie", label: "Serie" },
+    { key: "modelo", label: "Modelo" }, // ← columna añadida
     {
       key: "categoria",
       label: "Categoria",
@@ -97,7 +103,6 @@ export default function ActivosPage() {
       label: "Precio/mes",
       render: (item: SetActivo) => <span className="text-right">${item.precio_mes}</span>,
     }
-   
   ]
 
   if (loading) {
@@ -120,7 +125,6 @@ export default function ActivosPage() {
           className="bg-[#009966] text-white flex items-center gap-x-2 px-3 py-1.5 cursor-pointer rounded-lg"
           onClick={() => router.push("/dashboard/activos/nuevo")} >
             <Plus className="mr-2 h-4 w-4 text-white" />
-         
           Nuevo Activo
           </button>
           <Button 
@@ -142,8 +146,8 @@ export default function ActivosPage() {
           <DataTable
             data={activos as unknown as Record<string, unknown>[]}
             columns={activoColumns as { key: string; label: string; render?: (item: Record<string, unknown>) => React.ReactNode }[]}
-            searchKey="nombre"
-            searchPlaceholder="Buscar activo..."
+            searchKey={["nombre", "serie", "modelo"]} // ← antes solo "nombre"
+            searchPlaceholder="Buscar por nombre, serie o modelo..."
             onRowClick={(item) => router.push(`/dashboard/activos/${item.id}`)}
           />
         </TabsContent>
@@ -152,8 +156,8 @@ export default function ActivosPage() {
           <DataTable
             data={sets as unknown as Record<string, unknown>[]}
             columns={setColumns as { key: string; label: string; render?: (item: Record<string, unknown>) => React.ReactNode }[]}
-            searchKey="nombre"
-            searchPlaceholder="Buscar set..."
+            searchKey={["nombre", "serie", "modelo"]} // ← "modelo" ya disponible en columnas
+            searchPlaceholder="Buscar por nombre, serie o modelo..."
             onRowClick={(item) => router.push(`/dashboard/activos/set/${item.id}`)}
           />
         </TabsContent>

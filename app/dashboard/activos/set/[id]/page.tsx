@@ -26,8 +26,10 @@ import {
   FileCheck,
   Activity,
   List,
+  DollarSign,
 } from "lucide-react"
 import Image from "next/image"
+import BackButton from "@/components/BackBotton"
 
 interface DocumentoAdjunto {
   id: string
@@ -209,7 +211,7 @@ export default function SetActivoDetailPage() {
       return
     }
     toast.success("Set eliminado")
-    router.push("/dashboard/sets-activos")
+    router.push("/dashboard/activos")
   }
 
   const formatFileSize = (bytes?: number) => {
@@ -279,28 +281,27 @@ export default function SetActivoDetailPage() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <Button variant="ghost" size="sm" onClick={() => router.push("/dashboard/activos")}>
-          <ArrowLeft className="mr-1 h-4 w-4" />
-          Volver
-        </Button>
+        
+        <BackButton href={`/dashboard/activos`} label="Volver" />
         <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => router.push(`/dashboard/sets-activos/${id}/editar`)}
+          <button
+             className="bg-white text-black px-3 py-1.5 rounded-lg cursor-pointer flex items-center gap-x-2 shadow-2xl"
+            onClick={() => router.push(`/dashboard/activos/set/${id}/editar`)}
           >
             <Edit className="mr-1 h-4 w-4" />
             Editar
-          </Button>
-          <Button variant="destructive" size="sm" onClick={deleteSet}>
+          </button>
+          <button
+          className="bg-red-500 text-white px-3 py-1.5 rounded-lg cursor-pointer flex items-center gap-x-2 shadow-2xl"
+          onClick={deleteSet}>
             <Trash2 className="mr-1 h-4 w-4" />
             Eliminar
-          </Button>
+          </button>
         </div>
       </div>
 
       {/* Set Profile Card */}
-      <Card className="overflow-hidden">
+      <Card className="overflow-hidden bg-white">
        
         <CardContent className="relative pt-0 pb-6">
           {/* Imagen */}
@@ -422,6 +423,33 @@ export default function SetActivoDetailPage() {
                 </div>
               </div>
             )}
+
+              {set.precio_dia && (
+                          <div className="flex items-start gap-3">
+                            <div className="mt-1">
+                              <DollarSign className="h-5 w-5 text-muted-foreground" />
+                            </div>
+                            <div>
+                              <p className="text-sm text-muted-foreground">Precio por Día</p>
+                              <p className="font-medium">${set.precio_dia.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</p>
+                            </div>
+                          </div>
+            
+                        )}  
+            
+                        {set.precio_mes && (
+                          <div className="flex items-start gap-3">
+                           
+                            <div className="mt-1">
+                              <DollarSign className="h-5 w-5 text-muted-foreground" />
+                            </div>
+                            <div>
+                              <p className="text-sm text-muted-foreground">Precio por Mes</p>
+                              <p className="font-medium">${set.precio_mes.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</p>
+                            </div>
+                          </div>
+                        )}
+
           </div>
 
           {/* Description */}

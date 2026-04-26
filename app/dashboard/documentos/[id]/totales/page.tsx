@@ -14,7 +14,6 @@ import type {
   MontajeDetalle
 } from '@/types/database.types'
 import { toast } from "sonner"
-import './totales.css'
 import { formatearFecha } from "@/utils/FormatDate"
 
 interface MiEmpresa {

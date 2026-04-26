@@ -89,13 +89,16 @@ const Sidebar: React.FC<SidebarProps> = ({
                               onSectionChange(subItem.section)
                             }
                             className={`w-full flex items-center space-x-3 p-2 rounded-lg transition-colors ${
-                              activeSection === subItem.section
+                           
+                                activeSection === subItem.section
                                 ? 'bg-emerald-600 text-white'
                                 : 'hover:bg-gray-800'
+                             
+                              
                             }`}
                           >
                             <subItem.icon className="w-4 h-4" />
-                            <span className="text-sm">{subItem.label}</span>
+                            <p className="text-base text-white">{subItem.label}</p>
                           </Link>
                         </li>
                       ))}

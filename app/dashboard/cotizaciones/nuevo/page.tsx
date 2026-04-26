@@ -1,4 +1,13 @@
+import BackButton from '@/components/BackBotton'
 import NuevoDocumentoPage from '@/components/shared/NuevoDocumentoPage'
 export default function Page() {
-return <NuevoDocumentoPage tipo="cotizacion" prefix="COT" backPath="/dashboard/cotizaciones" />
- }
+return(
+<div>
+   <section className='w-[90%] max-w-4xl mx-auto px-4 '>
+     
+      <BackButton href="/dashboard/cotizaciones" />
+    </section>
+<NuevoDocumentoPage tipo="cotizacion" prefix="COT" backPath="/dashboard/cotizaciones" />
+ </div>
+ 
+ )}
