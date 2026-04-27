@@ -140,14 +140,22 @@ export default function FacturasPage() {
           <div className="px-6 py-3 bg-red-50 border-b border-red-100 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <span className="text-sm font-medium text-red-800">{seleccionados.size} seleccionada{seleccionados.size > 1 ? 's' : ''}</span>
-              <button onClick={() => { setSeleccionados(new Set()); setConfirmarEliminar(false) }} className="text-xs text-red-600 underline">Cancelar</button>
+              <button onClick={() => { setSeleccionados(new Set()); setConfirmarEliminar(false) }} className="text-xs text-red-600 underline">
+             Cancelar
+              </button>
             </div>
             {!confirmarEliminar ? (
-              <button onClick={() => setConfirmarEliminar(true)} className="px-4 py-2 bg-red-600 text-white rounded-md text-sm hover:bg-red-700">Eliminar</button>
+              <button onClick={() => setConfirmarEliminar(true)} className="px-4 py-2 bg-red-600 text-white rounded-md text-sm hover:bg-red-700">
+                <p className='text-white'>Eliminar</p>
+                </button>
             ) : (
               <div className="flex items-center gap-2">
                 <span className="text-sm text-red-700">¿Confirmar?</span>
-                <button onClick={handleEliminar} disabled={eliminando} className="px-3 py-1.5 bg-red-600 text-white rounded text-sm disabled:opacity-60">{eliminando ? 'Eliminando...' : 'Sí'}</button>
+                <button onClick={handleEliminar} disabled={eliminando} className="px-3 py-1.5 bg-red-600 text-white rounded text-sm disabled:opacity-60">
+                   <p className='text-white'>
+                  {eliminando ? 'Eliminando...' : 'Sí'}
+                  </p>
+                  </button>
                 <button onClick={() => setConfirmarEliminar(false)} className="px-3 py-1.5 border rounded text-sm">No</button>
               </div>
             )}

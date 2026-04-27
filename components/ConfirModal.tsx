@@ -75,7 +75,8 @@ function ConfirmModal({
             onClick={onConfirm}
             disabled={loading}
           >
-            {loading ? "Eliminando..." : "Sí, eliminar"}
+           <p className="text-white">  {loading ? "Eliminando..." : "Sí, eliminar"}</p>
+          
           </button>
         </DialogFooter>
       </DialogContent>

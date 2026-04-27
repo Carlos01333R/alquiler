@@ -144,11 +144,15 @@ export default function CotizacionesPage() {
               <button onClick={() => { setSeleccionados(new Set()); setConfirmarEliminar(false) }} className="text-xs text-red-600 underline">Cancelar</button>
             </div>
             {!confirmarEliminar ? (
-              <button onClick={() => setConfirmarEliminar(true)} className="px-4 py-2 bg-red-600 text-white rounded-md text-sm hover:bg-red-700">Eliminar</button>
+              <button onClick={() => setConfirmarEliminar(true)} className="px-4 py-2 bg-red-600 text-white rounded-md text-sm hover:bg-red-700">
+                <p className='text-white'>Eliminar</p>
+              </button>
             ) : (
               <div className="flex items-center gap-2">
                 <span className="text-sm text-red-700">¿Confirmar?</span>
-                <button onClick={handleEliminar} disabled={eliminando} className="px-3 py-1.5 bg-red-600 text-white rounded text-sm disabled:opacity-60">{eliminando ? 'Eliminando...' : 'Sí'}</button>
+                <button onClick={handleEliminar} disabled={eliminando} className="px-3 py-1.5 bg-red-600 text-white rounded text-sm disabled:opacity-60">
+                  <p className='text-white'>    {eliminando ? 'Eliminando...' : 'Sí'}</p>
+              </button>
                 <button onClick={() => setConfirmarEliminar(false)} className="px-3 py-1.5 border rounded text-sm">No</button>
               </div>
             )}
