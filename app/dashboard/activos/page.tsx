@@ -6,7 +6,7 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import type { Activo, SetActivo } from "@/lib/types"
-import { DataTable } from "@/components/data-table"
+import { DataTable, type FilterConfig } from "@/components/data-table"
 import { StatusBadge } from "@/components/status-badge"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -105,6 +105,17 @@ export default function ActivosPage() {
     }
   ]
 
+
+  const activoFilters: FilterConfig[] = [
+    { key: "tipo", label: "Tipo", placeholder: "Tipo" },
+    { key: "estado_disponibilidad", label: "Disponibilidad", placeholder: "Disponibilidad" },
+  ]
+
+  const setFilters: FilterConfig[] = [
+    { key: "tipo", label: "Tipo", placeholder: "Tipo" },
+    { key: "estado_disponibilidad", label: "Disponibilidad", placeholder: "Disponibilidad" },
+  ]
+
   if (loading) {
     return (
        <div className="h-screen flex items-center justify-center">
@@ -114,7 +125,7 @@ export default function ActivosPage() {
   }
 
   return (
-    <div className="space-y-6 bg-white p-6 rounded-xl shadow-md">
+    <div className="w-full space-y-6 bg-white p-6 rounded-xl shadow-md">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground">Activos</h1>
@@ -142,12 +153,13 @@ export default function ActivosPage() {
           <TabsTrigger value="sets">Sets de Activos ({sets.length})</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="activos" className="mt-4">
+        <TabsContent value="activos" className="">
           <DataTable
             data={activos as unknown as Record<string, unknown>[]}
             columns={activoColumns as { key: string; label: string; render?: (item: Record<string, unknown>) => React.ReactNode }[]}
             searchKey={["nombre", "serie", "modelo"]} // ← antes solo "nombre"
             searchPlaceholder="Buscar por nombre, serie o modelo..."
+            filters={activoFilters}
             onRowClick={(item) => router.push(`/dashboard/activos/${item.id}`)}
           />
         </TabsContent>
@@ -158,6 +170,7 @@ export default function ActivosPage() {
             columns={setColumns as { key: string; label: string; render?: (item: Record<string, unknown>) => React.ReactNode }[]}
             searchKey={["nombre", "serie", "modelo"]} // ← "modelo" ya disponible en columnas
             searchPlaceholder="Buscar por nombre, serie o modelo..."
+            filters={setFilters}
             onRowClick={(item) => router.push(`/dashboard/activos/set/${item.id}`)}
           />
         </TabsContent>

@@ -83,6 +83,8 @@ export type Activo = {
   categorias?: Categoria
   precio_dia: number
   precio_mes: number
+  latitude: number | null
+  longitude: number | null
 }
 
 export type SetActivo = {
@@ -113,6 +115,8 @@ export type SetActivo = {
   categorias?: Categoria
   precio_dia: number
   precio_mes: number
+  latitude: number | null
+  longitude: number | null
 }
 
 export type Mantenimiento = {

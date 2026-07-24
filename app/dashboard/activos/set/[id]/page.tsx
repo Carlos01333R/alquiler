@@ -30,7 +30,8 @@ import {
 } from "lucide-react"
 import Image from "next/image"
 import BackButton from "@/components/BackBotton"
-
+import Link from "next/link"
+import { ConfirmDialog } from "@/components/ConfirmDialog"
 interface DocumentoAdjunto {
   id: string
   nombre: string
@@ -66,7 +67,11 @@ export default function SetActivoDetailPage() {
   const [loading, setLoading] = useState(true)
   const [uploadingDoc, setUploadingDoc] = useState(false)
   const [uploadOpen, setUploadOpen] = useState(false)
-
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [docToDelete, setDocToDelete] = useState<DocumentoAdjunto | null>(null)
+  const [deletingDoc, setDeletingDoc] = useState(false)
+const [blockedDialogOpen, setBlockedDialogOpen] = useState(false)
   const loadData = useCallback(async () => {
     const { data, error } = await supabase
       .from("sets_activos")
@@ -178,41 +183,31 @@ export default function SetActivoDetailPage() {
   }
 
   const deleteDocument = async (doc: DocumentoAdjunto) => {
-    if (!confirm(`¿Eliminar el documento "${doc.nombre}"?`)) return
+  setDeletingDoc(true)
+  try {
+    const { error: storageError } = await supabase.storage
+      .from('sets-activos')
+      .remove([doc.path])
+    if (storageError) throw storageError
 
-    try {
-      const { error: storageError } = await supabase.storage
-        .from('sets-activos')
-        .remove([doc.path])
+    const updatedDocs = documentos.filter(d => d.id !== doc.id)
+    const { error: updateError } = await supabase
+      .from('sets_activos')
+      .update({ documentos_adjuntos: updatedDocs })
+      .eq('id', id)
+    if (updateError) throw updateError
 
-      if (storageError) throw storageError
-
-      const updatedDocs = documentos.filter(d => d.id !== doc.id)
-
-      const { error: updateError } = await supabase
-        .from('sets_activos')
-        .update({ documentos_adjuntos: updatedDocs })
-        .eq('id', id)
-
-      if (updateError) throw updateError
-
-      toast.success("Documento eliminado")
-      loadData()
-    } catch (error: any) {
-      toast.error(error.message || "Error al eliminar el documento")
-    }
+    toast.success("Documento eliminado")
+    loadData()
+  } catch (error: any) {
+    toast.error(error.message || "Error al eliminar el documento")
+  } finally {
+    setDeletingDoc(false)
+    setDocToDelete(null)
   }
+}
 
-  const deleteSet = async () => {
-    if (!confirm("¿Estás seguro de eliminar este set de activos?")) return
-    const { error } = await supabase.from("sets_activos").delete().eq("id", id)
-    if (error) {
-      toast.error(error.message)
-      return
-    }
-    toast.success("Set eliminado")
-    router.push("/dashboard/activos")
-  }
+ 
 
   const formatFileSize = (bytes?: number) => {
     if (!bytes) return 'N/A'
@@ -262,6 +257,30 @@ export default function SetActivoDetailPage() {
     )
   }
 
+  const deleteSet = async () => {
+  setDeleting(true)
+  try {
+    const { error } = await supabase.from("sets_activos").delete().eq("id", id)
+    if (error) throw error
+    toast.success("Set eliminado y activos liberados")
+    router.push("/dashboard/activos")
+  } catch (error: any) {
+    toast.error(error.message || "Error al eliminar el set")
+  } finally {
+    setDeleting(false)
+    setDeleteDialogOpen(false)
+  }
+}
+
+
+const handleDeleteClick = () => {
+  if (set?.estado_disponibilidad === "alquilado") {
+    setBlockedDialogOpen(true)
+    return
+  }
+  setDeleteDialogOpen(true)
+}
+
   if (loading) {
     return (
       <div className="space-y-4">
@@ -293,11 +312,12 @@ export default function SetActivoDetailPage() {
           </button>
           <button
           className="bg-red-500 text-white px-3 py-1.5 rounded-lg cursor-pointer flex items-center gap-x-2 shadow-2xl"
-          onClick={deleteSet}>
+          onClick={handleDeleteClick}>
             <Trash2 className="mr-1 h-4 w-4" />
             Eliminar
           </button>
         </div>
+       
       </div>
 
       {/* Set Profile Card */}
@@ -368,15 +388,7 @@ export default function SetActivoDetailPage() {
               </div>
             )}
 
-            <div className="flex items-start gap-3">
-              <div className="mt-1">
-                <Boxes className="h-5 w-5 text-muted-foreground" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Stock</p>
-                <p className="font-medium">{set.stock} unidad(es)</p>
-              </div>
-            </div>
+           
 
             <div className="flex items-start gap-3">
               <div className="mt-1">
@@ -395,7 +407,13 @@ export default function SetActivoDetailPage() {
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Ubicación</p>
-                  <p className="font-medium">{set.ubicacion}</p>
+                    <Link
+                                  href={`https://www.google.com/maps/search/?api=1&query=${set.latitude},${set.longitude}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                >
+                  <p className="font-medium text-blue-600 underline">{set.ubicacion}</p>
+                  </Link>
                 </div>
               </div>
             )}
@@ -711,14 +729,14 @@ export default function SetActivoDetailPage() {
                         >
                           <Download className="h-4 w-4" />
                         </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => deleteDocument(doc)}
-                          title="Eliminar"
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
+                       <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setDocToDelete(doc)}
+                        title="Eliminar"
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
                       </div>
                     </div>
                   ))}
@@ -728,8 +746,65 @@ export default function SetActivoDetailPage() {
           </Card>
         </TabsContent>
       </Tabs>
+
+
+       <ConfirmDialog
+      open={deleteDialogOpen}
+      onOpenChange={setDeleteDialogOpen}
+      title="¿Eliminar este set de activos?"
+      description={
+    <>
+      <p>
+        Esta acción eliminará permanentemente{" "}
+        <span className="font-semibold">"{set.nombre}"</span> y no se puede deshacer.
+      </p>
+      {componentes.length > 0 && (
+        <p className="mt-2">
+          Los <span className="font-medium">{componentes.length}</span> activo(s) asociados a este set
+          volverán automáticamente al estado{" "}
+          <span className="font-medium text-green-700">"Disponible"</span>.
+        </p>
+         )}
+          </>
+        }
+        confirmLabel="Sí, eliminar"
+        loading={deleting}
+        onConfirm={deleteSet}
+      />
+
+      <ConfirmDialog
+          open={!!docToDelete}
+          onOpenChange={(open) => !open && setDocToDelete(null)}
+          title="¿Eliminar documento?"
+          description={
+            <p>
+              Se eliminará <span className="font-semibold">"{docToDelete?.nombre}"</span> permanentemente.
+            </p>
+          }
+          confirmLabel="Sí, eliminar"
+          loading={deletingDoc}
+        onConfirm={() => {
+          if (docToDelete) deleteDocument(docToDelete)
+        }}
+        />
+
+      <ConfirmDialog
+        open={blockedDialogOpen}
+        onOpenChange={setBlockedDialogOpen}
+        title="No se puede eliminar este set"
+        description={
+          <p>
+            Este set está actualmente <span className="font-medium">alquilado</span>.
+            Debes finalizar el alquiler antes de poder eliminarlo.
+          </p>
+        }
+        infoOnly
+      />
     </div>
   )
+
+
+  
 }
 
 function Label({ children, className }: { children: React.ReactNode; className?: string }) {

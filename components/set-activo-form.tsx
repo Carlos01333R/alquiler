@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
-import type { SetActivo, Categoria, Activo } from "@/lib/types"
+import type { Categoria, Activo } from "@/lib/types"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -30,121 +30,8 @@ import {
   Package, Search, Loader2, CheckCircle2, Info,
 } from "lucide-react"
 import Image from "next/image"
+import { calcEstadoFromDatesSet, ESTADO_MANT_LABELS, ESTADO_CERT_LABELS, ArchivoAdjunto, SetActivoFormProps, ComponenteActivo, earliestDate, latestDate } from "@/lib/activo"
 
-interface SetActivoFormProps {
-  set?: SetActivo
-}
-
-interface ArchivoAdjunto {
-  id: string
-  nombre: string
-  url: string
-  path: string
-  tipo: string
-  tamaño: number
-}
-
-interface ComponenteActivo {
-  id: string
-  activo_id: string
-  nombre: string
-  cantidad: number
-  serie?: string
-  modelo?: string
-  fabricante?: string
-  descripcion?: string
-  imagen_url?: string
-  tipo?: string
-  estado_disponibilidad?: string
-  estado_certificacion?: string
-  estado_mantenimiento?: string
-  categoria_id?: string
-  ubicacion?: string
-  responsable?: string
-  accesorios_incluidos?: string
-  stock?: number
-  condicion?: string
-  documentos_adjuntos?: any[]
-  // Certification & maintenance dates from the source asset
-  fecha_ultima_certificacion?: string | null
-  fecha_proxima_certificacion?: string | null
-  fecha_ultimo_mantenimiento?: string | null
-  fecha_proximo_mantenimiento?: string | null
-}
-
-// ─── Date helpers ─────────────────────────────────────────────────────────────
-
-/**
- * Returns true if `s` is a non-empty, valid date string.
- */
-const isValidDate = (s?: string | null): s is string =>
-  !!s && !isNaN(Date.parse(s))
-
-/**
- * Given a list of date strings (possibly null/undefined), returns:
- * - The **earliest** valid date (as "YYYY-MM-DD") or null if none exist.
- */
-const earliestDate = (dates: (string | null | undefined)[]): string | null => {
-  const valid = dates.filter(isValidDate).map((d) => new Date(d).getTime())
-  if (valid.length === 0) return null
-  return new Date(Math.min(...valid)).toISOString().split("T")[0]
-}
-
-/**
- * Given a list of date strings, returns the **latest** valid date or null.
- */
-const latestDate = (dates: (string | null | undefined)[]): string | null => {
-  const valid = dates.filter(isValidDate).map((d) => new Date(d).getTime())
-  if (valid.length === 0) return null
-  return new Date(Math.max(...valid)).toISOString().split("T")[0]
-}
-
-/**
- * Derives the estado (certificación or mantenimiento) from a pair of dates.
- *
- * Rules:
- *  - No valid dates at all           → "na"
- *  - today > fecha_proxima           → "vencido"
- *  - today === fecha_proxima (same day) → "en_certificacion" / "en_mantenimiento"
- *  - today < fecha_proxima AND within DAYS_ALERT days → "proximo_a_vencer"
- *  - today is between ultima and proxima (normal range) → "vigente"
- *  - Only ultima is set (no proxima)  → "vigente"
- *
- * @param ultima   Last certification/maintenance date (YYYY-MM-DD)
- * @param proxima  Next certification/maintenance date (YYYY-MM-DD)
- * @param DAYS_ALERT Number of days before expiry to show "proximo_a_vencer" (default 30)
- */
-const calcEstadoFromDates = (
-  ultima?: string | null,
-  proxima?: string | null,
-  DAYS_ALERT = 10
-): string => {
-  const hasUltima = isValidDate(ultima)
-  const hasProxima = isValidDate(proxima)
-
-  // Neither date set → N/A
-  if (!hasUltima && !hasProxima) return "na"
-
-  // If only ultima is set, consider vigente (we know the last event but not the next)
-  if (hasUltima && !hasProxima) return "vigente"
-
-  // proxima is set — compare against today
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-
-  const proximaDate = new Date(proxima!)
-  proximaDate.setHours(0, 0, 0, 0)
-
-  const diffMs = proximaDate.getTime() - today.getTime()
-  const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24))
-
-  if (diffDays < 0) return "vencido"
-  if (diffDays === 0) return "en_certificacion"
-  if (diffDays <= DAYS_ALERT) return "proximo_a_vencer"
-  return "vigente"
-}
-
-// ─── Component ────────────────────────────────────────────────────────────────
 
 export function SetActivoForm({ set }: SetActivoFormProps) {
   const router = useRouter()
@@ -209,6 +96,11 @@ export function SetActivoForm({ set }: SetActivoFormProps) {
     set?.componentes || [] as any
   )
 
+
+  const initialActivoIdsRef = useRef<Set<string>>(
+    new Set((set?.componentes || []).map((c: any) => c.activo_id))
+  )
+
   const [dialogOpen, setDialogOpen] = useState(false)
   const [activosDisponibles, setActivosDisponibles] = useState<Activo[]>([])
   const [loadingActivos, setLoadingActivos] = useState(false)
@@ -222,12 +114,7 @@ export function SetActivoForm({ set }: SetActivoFormProps) {
   const imagenInputRef = useRef<HTMLInputElement>(null)
   const documentosInputRef = useRef<HTMLInputElement>(null)
 
-  // ─── Auto-compute dates from componentes ────────────────────────────────────
 
-  /**
-   * Recalculates the four date fields from the current componentes list,
-   * unless the user has manually overridden them.
-   */
   const recalcDatesFromComponentes = useCallback(
     (updatedComponentes: ComponenteActivo[]) => {
       const ultCerts = updatedComponentes.map((c) => c.fecha_ultima_certificacion)
@@ -264,8 +151,7 @@ export function SetActivoForm({ set }: SetActivoFormProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [componentes, dateOverrides])
 
-  // ─── Auto-suggest precio_mes = precio_dia * 30 * 0.90 ──────────────────────
-
+ 
   useEffect(() => {
     if (precioMesOverride) return
     const dia = parseFloat(form.precio_dia)
@@ -277,21 +163,20 @@ export function SetActivoForm({ set }: SetActivoFormProps) {
     }
   }, [form.precio_dia, precioMesOverride])
 
-  // ─── Auto-calc estado_certificacion & estado_mantenimiento from dates ────────
 
   useEffect(() => {
     if (!estadoOverrides.estado_certificacion) {
-      const estado = calcEstadoFromDates(
+      const estado = calcEstadoFromDatesSet(
         form.fecha_ultima_certificacion,
         form.fecha_proxima_certificacion
       )
-      setForm((prev : any) => ({ ...prev, estado_certificacion: estado }))
+      setForm((prev: any) => ({ ...prev, estado_certificacion: estado }))
     }
   }, [form.fecha_ultima_certificacion, form.fecha_proxima_certificacion, estadoOverrides.estado_certificacion])
 
   useEffect(() => {
     if (!estadoOverrides.estado_mantenimiento) {
-      const estado = calcEstadoFromDates(
+      const estado = calcEstadoFromDatesSet(
         form.fecha_ultimo_mantenimiento,
         form.fecha_proximo_mantenimiento
       )
@@ -299,7 +184,6 @@ export function SetActivoForm({ set }: SetActivoFormProps) {
     }
   }, [form.fecha_ultimo_mantenimiento, form.fecha_proximo_mantenimiento, estadoOverrides.estado_mantenimiento])
 
-  // ─── Load categories ─────────────────────────────────────────────────────────
 
   useEffect(() => {
     supabase
@@ -309,17 +193,8 @@ export function SetActivoForm({ set }: SetActivoFormProps) {
       .then(({ data }) => setCategorias((data as Categoria[]) || []))
   }, [])
 
-  // ─── Generate series on create ───────────────────────────────────────────────
+ 
 
-  useEffect(() => {
-    if (!isEdit) {
-      const serie = generateSerie(form.tipo)
-      setForm((prev) => ({ ...prev, serie }))
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  // ─── Load available assets when dialog opens ─────────────────────────────────
 
   useEffect(() => {
     if (dialogOpen) {
@@ -330,40 +205,18 @@ export function SetActivoForm({ set }: SetActivoFormProps) {
     }
   }, [dialogOpen])
 
-  // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-  const generateSerie = (tipo: string): string => {
-    const prefix = tipo === "kit_equipos" ? "KIT" : "MAL"
-    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-    const random = Array.from(crypto.getRandomValues(new Uint8Array(9)))
-      .map((b) => chars[b % chars.length])
-      .join("")
-    return `${prefix}${random}`
-  }
+const handleChange = (key: string, value: string | number) => {
+  setForm((prev) => ({ ...prev, [key]: value }))
+}
 
-  // ─── Handlers ─────────────────────────────────────────────────────────────────
 
-  const handleChange = (key: string, value: string | number) => {
-    if (key === "tipo") {
-      const serie = generateSerie(value as string)
-      setForm((prev: any) => ({ ...prev, tipo: value as string, serie }))
-    } else {
-      setForm((prev) => ({ ...prev, [key]: value }))
-    }
-  }
-
-  /**
-   * Handle manual edits to date fields — marks them as overridden so
-   * auto-calculation won't overwrite the user's value.
-   */
   const handleDateChange = (key: keyof typeof dateOverrides, value: string) => {
     setDateOverrides((prev) => ({ ...prev, [key]: true }))
     setForm((prev) => ({ ...prev, [key]: value }))
   }
 
-  /**
-   * Reset a date field back to auto-calculation mode.
-   */
+
   const resetDateOverride = (key: keyof typeof dateOverrides) => {
     setDateOverrides((prev) => ({ ...prev, [key]: false }))
     // Immediately trigger recalc by bumping the componentes reference
@@ -597,6 +450,46 @@ export function SetActivoForm({ set }: SetActivoFormProps) {
     }
   }
 
+ const sincronizarEstadoActivos = async () => {
+  const idsActuales = new Set(componentes.map((c) => c.activo_id))
+  const idsRemovidos = [...initialActivoIdsRef.current].filter(
+    (id) => !idsActuales.has(id)
+  )
+
+  const operaciones: PromiseLike<{ error: any }>[] = []
+
+  if (idsActuales.size > 0) {
+    operaciones.push(
+      supabase
+        .from("activos")
+        .update({ estado_disponibilidad: "en_set" })
+        .in("id", [...idsActuales])
+    )
+  }
+
+  if (idsRemovidos.length > 0) {
+    operaciones.push(
+      supabase
+        .from("activos")
+        .update({ estado_disponibilidad: "disponible" })
+        .in("id", idsRemovidos)
+    )
+  }
+
+  if (operaciones.length === 0) return
+
+  const resultados = await Promise.all(operaciones)
+  const conError = resultados.find((r) => r?.error)
+  if (conError) {
+    console.error(conError.error)
+    toast.error(
+      "El set se guardó, pero no se pudo actualizar el estado de algunos activos"
+    )
+    return
+  }
+
+  initialActivoIdsRef.current = idsActuales
+}
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!form.nombre) {
@@ -620,7 +513,7 @@ export function SetActivoForm({ set }: SetActivoFormProps) {
     let longitude = null
 
     if (form.ubicacion) {
-      const geoRes = await fetch("/api/geocode", {
+      const geoRes = await fetch("/api/geocodemap", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ address: form.ubicacion }),
@@ -662,34 +555,42 @@ export function SetActivoForm({ set }: SetActivoFormProps) {
           })
           .eq("id", set.id)
         if (error) throw error
+
+        await sincronizarEstadoActivos()
+
         toast.success("Set actualizado")
         router.push("/dashboard/activos")
       } else {
-        const { data: nuevoSet, error: createError } = await supabase
-          .from("sets_activos")
-          .insert({
-            ...commonPayload,
-            imagen_url: null,
-            documentos_adjuntos: [],
-            componentes: [],
-          })
-          .select()
-          .single()
-        if (createError) throw createError
+  const { serie: _serieIgnorada, ...payloadSinSerie } = commonPayload
 
-        const { imagenUrl, documentosAdjuntos, componentesActualizados } = await uploadFiles(nuevoSet.id)
-        const { error: updateError } = await supabase
-          .from("sets_activos")
-          .update({
-            imagen_url: imagenUrl,
-            documentos_adjuntos: documentosAdjuntos,
-            componentes: componentesActualizados,
-          })
-          .eq("id", nuevoSet.id)
-        if (updateError) throw updateError
-        toast.success("Set creado")
-        router.push("/dashboard/activos")
-      }
+  const { data: nuevoSet, error: createError } = await supabase
+    .from("sets_activos")
+    .insert({
+      ...payloadSinSerie,
+      imagen_url: null,
+      documentos_adjuntos: [],
+      componentes: [],
+    })
+    .select()
+    .single()
+  if (createError) throw createError
+
+  const { imagenUrl, documentosAdjuntos, componentesActualizados } = await uploadFiles(nuevoSet.id)
+  const { error: updateError } = await supabase
+    .from("sets_activos")
+    .update({
+      imagen_url: imagenUrl,
+      documentos_adjuntos: documentosAdjuntos,
+      componentes: componentesActualizados,
+    })
+    .eq("id", nuevoSet.id)
+  if (updateError) throw updateError
+
+  await sincronizarEstadoActivos()
+
+  toast.success("Set creado")
+  router.push("/dashboard/activos")
+}
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Error al guardar"
       toast.error(message)
@@ -713,6 +614,7 @@ export function SetActivoForm({ set }: SetActivoFormProps) {
       disponible: "Disponible",
       alquilado: "Alquilado",
       en_mantenimiento: "En mantenimiento",
+      en_certificacion: "En certificación",
       reservado: "Reservado",
     }
     return map[estado] ?? estado
@@ -774,13 +676,13 @@ export function SetActivoForm({ set }: SetActivoFormProps) {
                     {documentos.map((doc) => (
                       <div key={doc.id} className="flex items-center justify-between gap-2 p-2 bg-gray-50 rounded text-sm">
                         <div className="flex items-center gap-2 flex-1 min-w-0">
-                          <FileText className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                          <FileText className="w-4 h-4 text-gray-500 shrink-0" />
                           <div className="min-w-0 flex-1">
                             <p className="font-medium truncate">{doc.nombre}</p>
                             <p className="text-xs text-gray-500">{(doc.tamaño / 1024).toFixed(1)} KB</p>
                           </div>
                         </div>
-                        <div className="flex gap-1 flex-shrink-0">
+                        <div className="flex gap-1 shrink-0">
                           {doc.path && (
                             <Button type="button" variant="ghost" size="sm" onClick={() => downloadDocumento(doc)} className="p-1 h-auto">
                               <Download className="w-4 h-4 text-blue-500" />
@@ -835,11 +737,21 @@ export function SetActivoForm({ set }: SetActivoFormProps) {
               <Input value={form.modelo} onChange={(e) => handleChange("modelo", e.target.value)} />
             </div>
 
-            <div className="space-y-2">
-              <Label>Serie <span className="text-xs text-gray-400 font-normal">(generada automáticamente, editable)</span></Label>
-              <Input value={form.serie} onChange={(e) => handleChange("serie", e.target.value)} className="font-mono" />
-            </div>
-
+          <div className="space-y-2">
+          <Label>
+            Serie{" "}
+            <span className="text-xs text-gray-400 font-normal">
+              {isEdit ? "(editable)" : "(se genera automáticamente al guardar)"}
+            </span>
+          </Label>
+          <Input
+            value={isEdit ? form.serie : ""}
+            placeholder={isEdit ? "" : "Se asignará automáticamente"}
+            disabled={!isEdit}
+            onChange={(e) => handleChange("serie", e.target.value)}
+            className="font-mono"
+          />
+        </div>
             <div className="space-y-2">
               <Label>Fabricante</Label>
               <Input value={form.fabricante} onChange={(e) => handleChange("fabricante", e.target.value)} />
@@ -906,6 +818,7 @@ export function SetActivoForm({ set }: SetActivoFormProps) {
                   <SelectItem value="disponible">Disponible</SelectItem>
                   <SelectItem value="alquilado">Alquilado</SelectItem>
                   <SelectItem value="en_mantenimiento">En mantenimiento</SelectItem>
+                  <SelectItem value="en_certificacion">En certificación</SelectItem>
                   <SelectItem value="reservado">Reservado</SelectItem>
                 </SelectContent>
               </Select>
@@ -1003,11 +916,7 @@ export function SetActivoForm({ set }: SetActivoFormProps) {
                 )}
             </div>
 
-            <div className="space-y-2">
-              <Label>Stock</Label>
-              <Input type="number" min={0} value={form.stock} onChange={(e) => handleChange("stock", parseInt(e.target.value) || 0)} />
-            </div>
-
+        
             <div className="space-y-2">
               <Label>Ubicación</Label>
               <Input value={form.ubicacion} onChange={(e) => handleChange("ubicacion", e.target.value)} />
@@ -1180,7 +1089,7 @@ export function SetActivoForm({ set }: SetActivoFormProps) {
                             >
                               {/* Checkbox visual */}
                               <div
-                                className={`flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
+                                className={`shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
                                   isSelected
                                     ? "bg-primary border-primary"
                                     : "border-gray-300"
@@ -1193,7 +1102,7 @@ export function SetActivoForm({ set }: SetActivoFormProps) {
                                 )}
                               </div>
 
-                              <div className="relative h-12 w-12 flex-shrink-0 rounded overflow-hidden bg-gray-100">
+                              <div className="relative h-12 w-12 shrink-0 rounded overflow-hidden bg-gray-100">
                                 {activo.imagen_url ? (
                                   <Image src={activo.imagen_url} alt={activo.nombre} fill className="object-cover" />
                                 ) : (
@@ -1215,7 +1124,7 @@ export function SetActivoForm({ set }: SetActivoFormProps) {
                                 )}
                               </div>
 
-                              <Badge variant={getBadgeVariant(activo.estado_disponibilidad) as any} className="text-xs flex-shrink-0">
+                              <Badge variant={getBadgeVariant(activo.estado_disponibilidad) as any} className="text-xs shrink-0">
                                 {getEstadoLabel(activo.estado_disponibilidad)}
                               </Badge>
                             </button>
@@ -1252,7 +1161,7 @@ export function SetActivoForm({ set }: SetActivoFormProps) {
               <div className="border rounded-lg divide-y">
                 {componentes.map((componente) => (
                   <div key={componente.id} className="flex items-center gap-4 p-4">
-                    <div className="relative h-16 w-16 flex-shrink-0 rounded overflow-hidden bg-gray-100">
+                    <div className="relative h-16 w-16 shrink-0 rounded overflow-hidden bg-gray-100">
                       {componente.imagen_url ? (
                         <Image src={componente.imagen_url} alt={componente.nombre} fill className="object-cover" />
                       ) : (
@@ -1277,7 +1186,7 @@ export function SetActivoForm({ set }: SetActivoFormProps) {
                       )}
                     </div>
 
-                    <div className="flex items-center gap-2 flex-shrink-0">
+                    <div className="flex items-center gap-2 shrink-0">
                       <div className="flex items-center gap-2">
                         <Button type="button" variant="outline" size="sm" onClick={() => updateCantidad(componente.id, componente.cantidad - 1)} disabled={componente.cantidad <= 1}>-</Button>
                         <span className="w-12 text-center font-medium">{componente.cantidad}</span>

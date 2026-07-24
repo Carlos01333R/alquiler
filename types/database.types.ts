@@ -238,3 +238,17 @@ export interface MontajeDetalle {
   actividades_programadas: string[]
   repuestos_requeridos: string[]
 }
+
+
+export interface ProyectoDetalle {
+  tipo: string
+  costo: number
+  titulo: string
+  prioridad: string
+  descripcion?: string
+  fecha_inicio?: string
+  fecha_final?: string
+  proyecto_id: string
+  repuestos_requeridos?: string[]
+  actividades_programadas?: string[]
+}

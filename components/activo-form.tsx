@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect, useRef } from "react"
+import React, { useState, useEffect, useRef, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import type { Activo, Categoria } from "@/lib/types"
@@ -19,64 +19,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { toast } from "sonner"
 import { Upload, X, FileText, Image as ImageIcon, Download, Info } from "lucide-react"
 import Image from "next/image"
+import { calcEstadoFromDates, ESTADO_CERT_LABELS, ESTADO_MANT_LABELS, ArchivoAdjunto, ActivoFormProps } from "@/lib/activo"
 
-interface ActivoFormProps {
-  activo?: Activo
-}
-
-interface ArchivoAdjunto {
-  id: string
-  nombre: string
-  url: string
-  path: string
-  tipo: string
-  tamaño: number
-}
-
-// ─── Date helpers ─────────────────────────────────────────────────────────────
-
-const isValidDate = (s?: string | null): s is string =>
-  !!s && !isNaN(Date.parse(s))
-
-/**
- * Derives estado_certificacion / estado_mantenimiento from a pair of dates.
- *
- * Rules (DAYS_ALERT = 10):
- *  - No valid dates              → "na"
- *  - Only ultima set, no proxima → "vigente"
- *  - today > proxima             → "vencido"
- *  - today === proxima (same day)→ "en_certificacion"
- *  - proxima within DAYS_ALERT   → "proximo_a_vencer"
- *  - otherwise                   → "vigente"
- */
-const calcEstadoFromDates = (
-  ultima?: string | null,
-  proxima?: string | null,
-  DAYS_ALERT = 10
-): string => {
-  const hasUltima = isValidDate(ultima)
-  const hasProxima = isValidDate(proxima)
-
-  if (!hasUltima && !hasProxima) return "na"
-  if (hasUltima && !hasProxima) return "vigente"
-
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-
-  const proximaDate = new Date(proxima!)
-  proximaDate.setHours(0, 0, 0, 0)
-
-  const diffDays = Math.round(
-    (proximaDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
-  )
-
-  if (diffDays < 0) return "vencido"
-  if (diffDays === 0) return "en_certificacion"
-  if (diffDays <= DAYS_ALERT) return "proximo_a_vencer"
-  return "vigente"
-}
-
-// ─── Component ────────────────────────────────────────────────────────────────
 
 export function ActivoForm({ activo }: ActivoFormProps) {
   const router = useRouter()
@@ -96,8 +40,6 @@ export function ActivoForm({ activo }: ActivoFormProps) {
     categoria_id: activo?.categoria_id || "",
     fabricante: activo?.fabricante || "",
     estado_disponibilidad: activo?.estado_disponibilidad || "disponible",
-    estado_certificacion: activo?.estado_certificacion || "na",
-    estado_mantenimiento: activo?.estado_mantenimiento || "na",
     stock: activo?.stock ?? 1,
     ubicacion: activo?.ubicacion || "",
     responsable: activo?.responsable || "",
@@ -109,11 +51,22 @@ export function ActivoForm({ activo }: ActivoFormProps) {
     fecha_proximo_mantenimiento: activo?.fecha_proximo_mantenimiento || "",
   })
 
-  // Track manual overrides so auto-calc doesn't stomp user edits
-  const [estadoOverrides, setEstadoOverrides] = useState({
-    estado_certificacion: false,
-    estado_mantenimiento: false,
-  })
+
+  const [manualEstadoCertificacion, setManualEstadoCertificacion] = useState<string | null>(null)
+  const [manualEstadoMantenimiento, setManualEstadoMantenimiento] = useState<string | null>(null)
+
+  const estadoCertificacionCalculado = useMemo(
+    () => calcEstadoFromDates(form.fecha_ultima_certificacion, form.fecha_proxima_certificacion),
+    [form.fecha_ultima_certificacion, form.fecha_proxima_certificacion]
+  )
+  const estadoMantenimientoCalculado = useMemo(
+    () => calcEstadoFromDates(form.fecha_ultimo_mantenimiento, form.fecha_proximo_mantenimiento),
+    [form.fecha_ultimo_mantenimiento, form.fecha_proximo_mantenimiento]
+  )
+
+  const estadoCertificacion = manualEstadoCertificacion ?? estadoCertificacionCalculado
+  const estadoMantenimiento = manualEstadoMantenimiento ?? estadoMantenimientoCalculado
+
   const [precioMesOverride, setPrecioMesOverride] = useState(false)
 
   const [imagen, setImagen] = useState<{
@@ -144,21 +97,15 @@ export function ActivoForm({ activo }: ActivoFormProps) {
       .then(({ data }) => setCategorias((data as Categoria[]) || []))
   }, [])
 
-  // ─── Generate series on create ─────────────────────────────────────────────
-  useEffect(() => {
-    if (!isEdit && categorias.length > 0) {
-      const serie = generateSerie(form.tipo)
-      setForm((prev) => {
-        const extra: Partial<typeof prev> = {}
-        if (prev.tipo === "herramienta" && !prev.categoria_id) {
-          const categoriaNa = findCategoriaNa(categorias)
-          if (categoriaNa) extra.categoria_id = categoriaNa.id
-        }
-        return { ...prev, serie, ...extra }
-      })
+ useEffect(() => {
+  if (!isEdit && categorias.length > 0 && form.tipo === "herramienta" && !form.categoria_id) {
+    const categoriaNa = findCategoriaNa(categorias)
+    if (categoriaNa) {
+      setForm((prev) => ({ ...prev, categoria_id: categoriaNa.id }))
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [categorias])
+  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [categorias])
 
   // ─── Auto-suggest precio_mes = precio_dia × 30 × 0.90 ─────────────────────
   useEffect(() => {
@@ -171,66 +118,27 @@ export function ActivoForm({ activo }: ActivoFormProps) {
     }
   }, [form.precio_dia, precioMesOverride])
 
-  // ─── Auto-calc estado_certificacion from dates ─────────────────────────────
-  useEffect(() => {
-    if (estadoOverrides.estado_certificacion) return
-    const estado = calcEstadoFromDates(
-      form.fecha_ultima_certificacion,
-      form.fecha_proxima_certificacion
-    )
-    setForm((prev : any) => ({ ...prev, estado_certificacion: estado }))
-  }, [
-    form.fecha_ultima_certificacion,
-    form.fecha_proxima_certificacion,
-    estadoOverrides.estado_certificacion,
-  ])
-
-  // ─── Auto-calc estado_mantenimiento from dates ─────────────────────────────
-  useEffect(() => {
-    if (estadoOverrides.estado_mantenimiento) return
-    const estado = calcEstadoFromDates(
-      form.fecha_ultimo_mantenimiento,
-      form.fecha_proximo_mantenimiento
-    )
-    setForm((prev : any) => ({ ...prev, estado_mantenimiento: estado }))
-  }, [
-    form.fecha_ultimo_mantenimiento,
-    form.fecha_proximo_mantenimiento,
-    estadoOverrides.estado_mantenimiento,
-  ])
-
   // ─── Helpers ──────────────────────────────────────────────────────────────
 
   const findCategoriaNa = (lista: Categoria[]) =>
     lista.find((c) => c.nombre.trim().toLowerCase() === "n/a")
 
-  const generateSerie = (tipo: string): string => {
-    const prefix = tipo === "equipo" ? "EQU" : "HER"
-    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-    const random = Array.from(crypto.getRandomValues(new Uint8Array(9)))
-      .map((b) => chars[b % chars.length])
-      .join("")
-    return `${prefix}${random}`
-  }
 
-  // ─── Handlers ─────────────────────────────────────────────────────────────
 
   const handleChange = (key: string, value: string | number) => {
-    if (key === "tipo") {
-      const serie = generateSerie(value as string)
-      const isHerramienta = value === "herramienta"
-      const categoriaNa = findCategoriaNa(categorias)
-      setForm((prev: any) => ({
-        ...prev,
-        tipo: value as string,
-        serie,
-        ...(isHerramienta && categoriaNa ? { categoria_id: categoriaNa.id } : {}),
-        ...(value === "equipo" ? { categoria_id: "" } : {}),
-      }))
-    } else {
-      setForm((prev) => ({ ...prev, [key]: value }))
-    }
+  if (key === "tipo") {
+    const isHerramienta = value === "herramienta"
+    const categoriaNa = findCategoriaNa(categorias)
+    setForm((prev: any) => ({
+      ...prev,
+      tipo: value as string,
+      ...(isHerramienta && categoriaNa ? { categoria_id: categoriaNa.id } : {}),
+      ...(value === "equipo" ? { categoria_id: "" } : {}),
+    }))
+  } else {
+    setForm((prev) => ({ ...prev, [key]: value }))
   }
+}
 
   const handleCategoryChange = (value: string) => {
     if (value === "crear_nueva") {
@@ -370,7 +278,7 @@ export function ActivoForm({ activo }: ActivoFormProps) {
 
     let latitude = null, longitude = null
     if (form.ubicacion) {
-      const geoRes = await fetch("/api/geocode", {
+      const geoRes = await fetch("/api/geocodemap", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ address: form.ubicacion }),
@@ -391,6 +299,8 @@ export function ActivoForm({ activo }: ActivoFormProps) {
 
       const commonPayload = {
         ...form,
+        estado_certificacion: estadoCertificacion,
+        estado_mantenimiento: estadoMantenimiento,
         categoria_id: categoriaId || null,
         latitude,
         longitude,
@@ -412,9 +322,11 @@ export function ActivoForm({ activo }: ActivoFormProps) {
         toast.success("Activo actualizado")
         router.push(`/dashboard/activos/${activo.id}`)
       } else {
+        const { serie: _serieIgnorada, ...payloadSinSerie } = commonPayload
+
         const { data: nuevoActivo, error: createError } = await supabase
           .from("activos")
-          .insert({ ...commonPayload, imagen_url: null, documentos_adjuntos: [] })
+          .insert({ ...payloadSinSerie, imagen_url: null, documentos_adjuntos: [] })
           .select()
           .single()
         if (createError) throw createError
@@ -435,7 +347,6 @@ export function ActivoForm({ activo }: ActivoFormProps) {
     }
   }
 
-  // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
     <form onSubmit={handleSubmit} className="bg-white p-6 rounded-xl shadow-md">
@@ -565,11 +476,21 @@ export function ActivoForm({ activo }: ActivoFormProps) {
               <Input value={form.modelo} onChange={(e) => handleChange("modelo", e.target.value)} />
             </div>
 
-            <div className="space-y-2">
-              <Label>Serie <span className="text-xs text-gray-400 font-normal">(generada automáticamente, editable)</span></Label>
-              <Input value={form.serie} onChange={(e) => handleChange("serie", e.target.value)} className="font-mono" />
-            </div>
-
+           <div className="space-y-2">
+          <Label>
+            Serie{" "}
+            <span className="text-xs text-gray-400 font-normal">
+              {isEdit ? "(editable)" : "(se genera automáticamente al guardar)"}
+            </span>
+          </Label>
+          <Input
+            value={isEdit ? form.serie : ""}
+            placeholder={isEdit ? "" : "Se asignará automáticamente"}
+            disabled={!isEdit}
+            onChange={(e) => handleChange("serie", e.target.value)}
+            className="font-mono"
+          />
+        </div>
             <div className="space-y-2">
               <Label>Fabricante</Label>
               <Input value={form.fabricante} onChange={(e) => handleChange("fabricante", e.target.value)} />
@@ -627,28 +548,29 @@ export function ActivoForm({ activo }: ActivoFormProps) {
                   <SelectItem value="disponible">Disponible</SelectItem>
                   <SelectItem value="alquilado">Alquilado</SelectItem>
                   <SelectItem value="en_mantenimiento">En mantenimiento</SelectItem>
+                  <SelectItem value="en_certificacion">En certificación</SelectItem>
                   <SelectItem value="reservado">Reservado</SelectItem>
                   <SelectItem value="en_set">En set</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
-            {/* ── Estado Certificación (auto) ───────────────────────────────── */}
+            {/* ── Estado Certificación (auto por fechas, override manual) ───── */}
             <div className="space-y-1">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1">
                   <Label>Estado Certificación</Label>
-                  {!estadoOverrides.estado_certificacion &&
+                  {!manualEstadoCertificacion &&
                     (form.fecha_ultima_certificacion || form.fecha_proxima_certificacion) && (
                       <span className="inline-flex items-center gap-1 text-xs text-blue-600 font-medium bg-blue-50 border border-blue-200 rounded-full px-2 py-0.5">
                         <Info className="w-3 h-3" />Auto
                       </span>
                     )}
                 </div>
-                {estadoOverrides.estado_certificacion && (
+                {manualEstadoCertificacion && (
                   <button
                     type="button"
-                    onClick={() => setEstadoOverrides((prev) => ({ ...prev, estado_certificacion: false }))}
+                    onClick={() => setManualEstadoCertificacion(null)}
                     className="text-xs text-blue-500 hover:underline"
                   >
                     Restaurar auto
@@ -656,14 +578,13 @@ export function ActivoForm({ activo }: ActivoFormProps) {
                 )}
               </div>
               <Select
-                value={form.estado_certificacion}
-                onValueChange={(v) => {
-                  setEstadoOverrides((prev) => ({ ...prev, estado_certificacion: true }))
-                  handleChange("estado_certificacion", v)
-                }}
+                value={estadoCertificacion}
+                onValueChange={(v) => setManualEstadoCertificacion(v)}
               >
-                <SelectTrigger className={estadoOverrides.estado_certificacion ? "border-amber-400" : ""}>
-                  <SelectValue />
+                <SelectTrigger className={manualEstadoCertificacion ? "border-amber-400" : ""}>
+                  <SelectValue placeholder="Seleccionar...">
+                    {ESTADO_CERT_LABELS[estadoCertificacion] ?? estadoCertificacion}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="vigente">Vigente</SelectItem>
@@ -673,28 +594,28 @@ export function ActivoForm({ activo }: ActivoFormProps) {
                   <SelectItem value="na">N/A</SelectItem>
                 </SelectContent>
               </Select>
-              {!estadoOverrides.estado_certificacion &&
+              {!manualEstadoCertificacion &&
                 (form.fecha_ultima_certificacion || form.fecha_proxima_certificacion) && (
                   <p className="text-xs text-gray-400">Calculado automáticamente desde las fechas de certificación</p>
                 )}
             </div>
 
-            {/* ── Estado Mantenimiento (auto) ───────────────────────────────── */}
+            {/* ── Estado Mantenimiento (auto por fechas, override manual) ───── */}
             <div className="space-y-1">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1">
                   <Label>Estado Mantenimiento</Label>
-                  {!estadoOverrides.estado_mantenimiento &&
+                  {!manualEstadoMantenimiento &&
                     (form.fecha_ultimo_mantenimiento || form.fecha_proximo_mantenimiento) && (
                       <span className="inline-flex items-center gap-1 text-xs text-blue-600 font-medium bg-blue-50 border border-blue-200 rounded-full px-2 py-0.5">
                         <Info className="w-3 h-3" />Auto
                       </span>
                     )}
                 </div>
-                {estadoOverrides.estado_mantenimiento && (
+                {manualEstadoMantenimiento && (
                   <button
                     type="button"
-                    onClick={() => setEstadoOverrides((prev) => ({ ...prev, estado_mantenimiento: false }))}
+                    onClick={() => setManualEstadoMantenimiento(null)}
                     className="text-xs text-blue-500 hover:underline"
                   >
                     Restaurar auto
@@ -702,14 +623,13 @@ export function ActivoForm({ activo }: ActivoFormProps) {
                 )}
               </div>
               <Select
-                value={form.estado_mantenimiento}
-                onValueChange={(v) => {
-                  setEstadoOverrides((prev) => ({ ...prev, estado_mantenimiento: true }))
-                  handleChange("estado_mantenimiento", v)
-                }}
+                value={estadoMantenimiento}
+                onValueChange={(v) => setManualEstadoMantenimiento(v)}
               >
-                <SelectTrigger className={estadoOverrides.estado_mantenimiento ? "border-amber-400" : ""}>
-                  <SelectValue />
+                <SelectTrigger className={manualEstadoMantenimiento ? "border-amber-400" : ""}>
+                  <SelectValue placeholder="Seleccionar...">
+                    {ESTADO_MANT_LABELS[estadoMantenimiento] ?? estadoMantenimiento}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="vigente">Vigente</SelectItem>
@@ -719,7 +639,7 @@ export function ActivoForm({ activo }: ActivoFormProps) {
                   <SelectItem value="na">N/A</SelectItem>
                 </SelectContent>
               </Select>
-              {!estadoOverrides.estado_mantenimiento &&
+              {!manualEstadoMantenimiento &&
                 (form.fecha_ultimo_mantenimiento || form.fecha_proximo_mantenimiento) && (
                   <p className="text-xs text-gray-400">Calculado automáticamente desde las fechas de mantenimiento</p>
                 )}

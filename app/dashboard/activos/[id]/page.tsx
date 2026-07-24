@@ -30,6 +30,8 @@ import {
 } from "lucide-react"
 import Image from "next/image"
 import BackButton from "@/components/BackBotton"
+import Link from "next/link"
+import { ConfirmDialog } from "@/components/ConfirmDialog"
 
 interface DocumentoAdjunto {
   id: string
@@ -50,6 +52,11 @@ export default function ActivoDetailPage() {
   const [loading, setLoading] = useState(true)
   const [uploadingDoc, setUploadingDoc] = useState(false)
   const [uploadOpen, setUploadOpen] = useState(false)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [docToDelete, setDocToDelete] = useState<DocumentoAdjunto | null>(null)
+  const [deletingDoc, setDeletingDoc] = useState(false)
+  const [blockedDialogOpen, setBlockedDialogOpen] = useState(false)
 
   const loadData = useCallback(async () => {
     const { data, error } = await supabase
@@ -77,6 +84,19 @@ export default function ActivoDetailPage() {
   useEffect(() => {
     loadData()
   }, [loadData])
+
+  const ESTADOS_BLOQUEADOS_ELIMINACION: Record<string, string> = {
+  alquilado: "El activo está actualmente alquilado. Debes finalizar el alquiler antes de poder eliminarlo.",
+  en_set: "El activo forma parte de un set de activos. Debes removerlo del set antes de poder eliminarlo.",
+}
+
+const handleDeleteClick = () => {
+  if (activo && ESTADOS_BLOQUEADOS_ELIMINACION[activo.estado_disponibilidad]) {
+    setBlockedDialogOpen(true)
+    return
+  }
+  setDeleteDialogOpen(true)
+}
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -159,44 +179,49 @@ export default function ActivoDetailPage() {
     }
   }
 
-  const deleteDocument = async (doc: DocumentoAdjunto) => {
-    if (!confirm(`¿Eliminar el documento "${doc.nombre}"?`)) return
-
-    try {
-      // Delete from storage
-      const { error: storageError } = await supabase.storage
-        .from('activos')
-        .remove([doc.path])
-
-      if (storageError) throw storageError
-
-      // Update activo - remove from array
-      const updatedDocs = documentos.filter(d => d.id !== doc.id)
-
-      const { error: updateError } = await supabase
-        .from('activos')
-        .update({ documentos_adjuntos: updatedDocs })
-        .eq('id', id)
-
-      if (updateError) throw updateError
-
-      toast.success("Documento eliminado")
-      loadData()
-    } catch (error: any) {
-      toast.error(error.message || "Error al eliminar el documento")
-    }
-  }
+ 
 
   const deleteActivo = async () => {
-    if (!confirm("¿Estás seguro de eliminar este activo?")) return
+  setDeleting(true)
+  try {
     const { error } = await supabase.from("activos").delete().eq("id", id)
-    if (error) {
-      toast.error(error.message)
-      return
-    }
+    if (error) throw error
     toast.success("Activo eliminado")
     router.push("/dashboard/activos")
+  } catch (error: any) {
+    toast.error(error.message || "Error al eliminar el activo")
+  } finally {
+    setDeleting(false)
+    setDeleteDialogOpen(false)
   }
+}
+
+ const deleteDocument = async (doc: DocumentoAdjunto) => {
+  setDeletingDoc(true)
+  try {
+    const { error: storageError } = await supabase.storage
+      .from('activos')
+      .remove([doc.path])
+    if (storageError) throw storageError
+
+    const updatedDocs = documentos.filter(d => d.id !== doc.id)
+    const { error: updateError } = await supabase
+      .from('activos')
+      .update({ documentos_adjuntos: updatedDocs })
+      .eq('id', id)
+    if (updateError) throw updateError
+
+    toast.success("Documento eliminado")
+    loadData()
+  } catch (error: any) {
+    toast.error(error.message || "Error al eliminar el documento")
+  } finally {
+    setDeletingDoc(false)
+    setDocToDelete(null)
+  }
+}
+
+
 
   const formatFileSize = (bytes?: number) => {
     if (!bytes) return 'N/A'
@@ -261,6 +286,8 @@ export default function ActivoDetailPage() {
     return <p className="text-muted-foreground">Activo no encontrado</p>
   }
 
+
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -276,7 +303,7 @@ export default function ActivoDetailPage() {
           </button>
           <button
             className="bg-red-500 text-white px-3 py-1.5 rounded-lg cursor-pointer flex items-center gap-x-2 shadow-2xl"
-          onClick={deleteActivo}>
+          onClick={handleDeleteClick}>
             <Trash2 className="mr-1 h-4 w-4" />
             Eliminar
           </button>
@@ -358,7 +385,13 @@ export default function ActivoDetailPage() {
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Ubicación</p>
-                  <p className="font-medium">{activo.ubicacion}</p>
+                    <Link
+                href={`https://www.google.com/maps/search/?api=1&query=${activo.latitude},${activo.longitude}`}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <p className="font-medium underline text-blue-600">{activo.ubicacion}</p>
+              </Link>
                 </div>
               </div>
             )}
@@ -591,14 +624,14 @@ export default function ActivoDetailPage() {
                         >
                           <Download className="h-4 w-4" />
                         </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => deleteDocument(doc)}
-                          title="Eliminar"
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
+                       <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setDocToDelete(doc)}
+                        title="Eliminar"
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
                       </div>
                     </div>
                   ))}
@@ -608,6 +641,51 @@ export default function ActivoDetailPage() {
           </Card>
         </TabsContent>
       </Tabs>
+
+        <ConfirmDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        title="¿Eliminar este activo?"
+        description={
+          <p>
+            Esta acción eliminará permanentemente{" "}
+            <span className="font-semibold">"{activo.nombre}"</span> y no se puede deshacer.
+          </p>
+        }
+        confirmLabel="Sí, eliminar"
+        loading={deleting}
+        onConfirm={deleteActivo}
+      />
+
+      <ConfirmDialog
+        open={!!docToDelete}
+        onOpenChange={(open) => {
+          if (!open) setDocToDelete(null)
+        }}
+        title="¿Eliminar documento?"
+        description={
+          <p>
+            Se eliminará <span className="font-semibold">"{docToDelete?.nombre}"</span> permanentemente.
+          </p>
+        }
+        confirmLabel="Sí, eliminar"
+        loading={deletingDoc}
+        onConfirm={() => {
+          if (docToDelete) deleteDocument(docToDelete)
+        }}
+      />
+
+      <ConfirmDialog
+  open={blockedDialogOpen}
+  onOpenChange={setBlockedDialogOpen}
+  title="No se puede eliminar este activo"
+  description={
+    <p>
+      {activo && ESTADOS_BLOQUEADOS_ELIMINACION[activo.estado_disponibilidad]}
+    </p>
+  }
+  infoOnly
+/>
     </div>
   )
 }

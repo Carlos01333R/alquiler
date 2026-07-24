@@ -46,7 +46,8 @@ const ESTADO_COLORS: Record<string, string> = {
   pendiente: 'bg-yellow-100 text-yellow-700',
   en_ejecucion: 'bg-blue-100 text-blue-800',
   realizada: 'bg-green-100 text-green-700',
-  finalizada: 'bg-purple-100 text-purple-700',
+  finalizada: 'bg-green-100 text-green-500',
+  cancelada: 'bg-red-100 text-red-700',
 }
 
 const ESTADOS_LABEL: Record<string, string> = {
@@ -54,6 +55,7 @@ const ESTADOS_LABEL: Record<string, string> = {
   en_ejecucion: 'En ejecución',
   realizada: 'Realizada',
   finalizada: 'Finalizada',
+  cancelada: 'Cancelada',
 }
 
 const ESTADOS_MANUALES = ['pendiente', 'en_ejecucion', 'realizada', 'finalizada', 'cancelada']
@@ -96,6 +98,7 @@ export default function OrdenesPage() {
       .eq('tipo_documento', 'orden_compra')
       .order('created_at', { ascending: false })
     if (error) throw error
+
 
     const conTotales = await Promise.all((data || []).map(async (doc) => {
       const [totRes, detRes] = await Promise.all([

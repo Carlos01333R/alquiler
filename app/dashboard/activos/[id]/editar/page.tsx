@@ -64,7 +64,7 @@ export default function ActivoEditPage() {
         <BackButton href={`/dashboard/activos/${id}`} label="Volver" />
       </div>
 
-      <ActivoForm activo={activo} />
+      <ActivoForm key={activo?.id ?? "loading"} activo={activo} />
     </div>
   )
 }
